@@ -1,0 +1,31 @@
+# ── Maven build output ─────────────────────────────────────────────────────────
+target/
+*.jar
+*.war
+*.ear
+*.class
+
+# ── Maven wrapper JAR ──────────────────────────────────────────────────────────
+.mvn/wrapper/maven-wrapper.jar
+
+# ── IDE ────────────────────────────────────────────────────────────────────────
+.idea/
+*.iml
+*.iws
+*.ipr
+.eclipse/
+.classpath
+.project
+.settings/
+.factorypath
+*.launch
+*.vscode/
+
+# ── Spring Boot / runtime ──────────────────────────────────────────────────────
+*.log
+logs/
+spring.log
+
+# ── Uploads & extracted output ────────────────────────────────────────────────
+uploads/
+output/

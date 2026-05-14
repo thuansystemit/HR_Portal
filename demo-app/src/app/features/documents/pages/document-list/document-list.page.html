@@ -1,0 +1,63 @@
+<app-page-layout
+  [title]="catStore.selected()?.name ?? 'Documents'"
+  subtitle="Files within this category."
+>
+  <ng-container actions>
+    <a class="btn btn-sm btn-outline-secondary" routerLink="/documents">
+      <i class="bi bi-arrow-left me-1"></i> Categories
+    </a>
+    @if (canUpload()) {
+      <span class="ms-2">
+        <app-btn size="sm" icon="bi-upload" (btnClick)="openUpload()">Upload Document</app-btn>
+      </span>
+    }
+  </ng-container>
+
+  <app-data-table
+    [columns]="columns()"
+    [data]="docStore.documents()"
+    [loading]="docStore.loading()"
+    [pageSize]="pageSize"
+    [showPagination]="false"
+    [controlledPage]="page()"
+    (stateChange)="onStateChange($event)"
+    emptyMessage="No documents in this category."
+  />
+
+  <app-divider spacing="sm" thickness="0px" />
+
+  <app-pagination
+    [page]="page()"
+    [pageCount]="pageCount()"
+    [total]="total()"
+    [pageSize]="pageSize"
+    (pageChange)="page.set($event)"
+  />
+</app-page-layout>
+
+<!-- Document type badge (category-level, same for every row) -->
+<ng-template #docTypeTpl>
+  @if (catStore.selected()?.documentType === 'CV') {
+    <span class="badge bg-info text-white">CV</span>
+  } @else if (catStore.selected()?.documentType === 'INVOICE') {
+    <span class="badge bg-success">Invoice</span>
+  }
+</ng-template>
+
+<!-- Actions cell -->
+<ng-template #actionsTpl let-row="row">
+  <div class="d-flex justify-content-center gap-2">
+    @if (catStore.selected()?.documentType === 'CV') {
+      <app-btn size="sm" variant="outline-info" icon="bi-person-badge" [iconOnly]="true"
+               title="View Candidate" (btnClick)="viewCandidate(row)" />
+    }
+    @if (canView()) {
+      <app-btn size="sm" variant="outline-primary" icon="bi-eye" [iconOnly]="true"
+               title="View" (btnClick)="openPreview(row)" />
+    }
+    @if (canDeleteDoc()) {
+      <app-btn size="sm" variant="outline-danger" icon="bi-trash" [iconOnly]="true"
+               title="Delete" (btnClick)="confirmDelete(row)" />
+    }
+  </div>
+</ng-template>

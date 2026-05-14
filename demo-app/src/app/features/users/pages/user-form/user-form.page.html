@@ -1,0 +1,104 @@
+<app-page-layout [title]="isEdit ? 'Edit User' : 'Add User'" subtitle="Fill in the details below.">
+  <ng-container actions>
+    <a class="btn btn-sm btn-outline-secondary" routerLink="/users">
+      <i class="bi bi-arrow-left me-1"></i> Back
+    </a>
+  </ng-container>
+
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-7">
+      <app-form-card [title]="isEdit ? 'Edit User Details' : 'New User'">
+
+        @if (store.error()) {
+          <div class="alert alert-danger py-2">{{ store.error() }}</div>
+        }
+
+        <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+          <div class="row g-3">
+
+            <!-- Name -->
+            <div class="col-12">
+              <label class="form-label fw-semibold" for="name">Full Name</label>
+              <input
+                id="name"
+                class="form-control"
+                [class.is-invalid]="isInvalid('name')"
+                formControlName="name"
+                placeholder="e.g. John Smith"
+              />
+              <div class="invalid-feedback">Name is required (min 2 characters).</div>
+            </div>
+
+            <!-- Email -->
+            <div class="col-12">
+              <label class="form-label fw-semibold" for="email">Email Address</label>
+              <input
+                id="email"
+                type="email"
+                class="form-control"
+                [class.is-invalid]="isInvalid('email')"
+                formControlName="email"
+                placeholder="e.g. john@example.com"
+              />
+              <div class="invalid-feedback">A valid email address is required.</div>
+            </div>
+
+            <!-- Password (create only) -->
+            @if (!isEdit) {
+              <div class="col-12">
+                <label class="form-label fw-semibold" for="password">Password</label>
+                <input
+                  id="password"
+                  type="password"
+                  class="form-control"
+                  [class.is-invalid]="isInvalid('password')"
+                  formControlName="password"
+                  placeholder="Minimum 8 characters"
+                  autocomplete="new-password"
+                />
+                <div class="invalid-feedback">Password must be at least 8 characters.</div>
+              </div>
+            }
+
+            <!-- Role -->
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold">Role</label>
+              <app-dropdown
+                formControlName="roleId"
+                [options]="roleOptions"
+                placeholder="Select role…"
+              />
+              @if (isInvalid('roleId')) {
+                <div class="invalid-msg">Please select a role.</div>
+              }
+            </div>
+
+            <!-- Status -->
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold">Status</label>
+              <app-dropdown
+                formControlName="status"
+                [options]="statusOptions"
+                placeholder="Select status…"
+                [searchable]="true"
+              />
+              @if (isInvalid('status')) {
+                <div class="invalid-msg">Please select a status.</div>
+              }
+            </div>
+
+          </div>
+
+          <hr class="mt-4" />
+          <div class="d-flex justify-content-end gap-2">
+            <a class="btn btn-outline-secondary" routerLink="/users">Cancel</a>
+            <app-btn type="submit" icon="bi-check-lg" [loading]="store.saving()">
+              {{ isEdit ? 'Save Changes' : 'Create User' }}
+            </app-btn>
+          </div>
+        </form>
+
+      </app-form-card>
+    </div>
+  </div>
+</app-page-layout>

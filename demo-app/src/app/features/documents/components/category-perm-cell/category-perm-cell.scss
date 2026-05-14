@@ -1,0 +1,21 @@
+.perm-cell-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  white-space: nowrap;
+
+  th, td {
+    padding: 0.15rem 0.5rem;
+  }
+
+  th {
+    font-weight: 600;
+    color: var(--bs-secondary-color);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+}
+
+.perm-cell-role {
+  font-weight: 500;
+}

@@ -1,0 +1,7 @@
+<div class="dvd" [ngClass]="hostClass()">
+  <span class="dvd-line"></span>
+  @if (label()) {
+    <span class="dvd-label">{{ label() }}</span>
+    <span class="dvd-line"></span>
+  }
+</div>

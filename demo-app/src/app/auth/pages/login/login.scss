@@ -1,0 +1,333 @@
+// ── Root ──────────────────────────────────────────────────────────────────────
+:host { display: block; }
+
+.lp-root {
+  display: flex;
+  min-height: 100vh;
+}
+
+// ── Left brand panel ──────────────────────────────────────────────────────────
+.lp-brand-panel {
+  position: relative;
+  flex: 0 0 52%;
+  overflow: hidden;
+  background: linear-gradient(145deg, #1e1b4b 0%, #3730a3 40%, #4f46e5 70%, #7c3aed 100%);
+  display: none;
+
+  @media (min-width: 900px) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+.lp-brand-inner {
+  position: relative;
+  z-index: 2;
+  padding: 3.5rem;
+  max-width: 480px;
+  color: #fff;
+}
+
+.lp-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 3rem;
+}
+
+.lp-logo-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+}
+
+.lp-headline {
+  font-size: 2.35rem;
+  font-weight: 800;
+  line-height: 1.18;
+  letter-spacing: -0.035em;
+  margin-bottom: 2.75rem;
+  color: #fff;
+}
+
+.lp-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.375rem;
+
+  li {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  strong {
+    display: block;
+    font-size: 0.925rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 0.125rem;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.825rem;
+    color: rgba(255, 255, 255, 0.6);
+  }
+}
+
+.lp-feat-icon {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  margin-top: 1px;
+}
+
+// Decorative blobs
+.lp-blob {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.18;
+  filter: blur(70px);
+  pointer-events: none;
+  animation: lp-float 8s ease-in-out infinite alternate;
+}
+
+.lp-blob--1 {
+  width: 380px;
+  height: 380px;
+  background: #a78bfa;
+  top: -120px;
+  right: -80px;
+  animation-delay: 0s;
+}
+
+.lp-blob--2 {
+  width: 280px;
+  height: 280px;
+  background: #38bdf8;
+  bottom: 60px;
+  left: -60px;
+  animation-delay: -3s;
+}
+
+.lp-blob--3 {
+  width: 220px;
+  height: 220px;
+  background: #f9a8d4;
+  bottom: -60px;
+  right: 80px;
+  animation-delay: -5s;
+}
+
+@keyframes lp-float {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(20px, -20px) scale(1.08); }
+}
+
+// ── Right form panel ──────────────────────────────────────────────────────────
+.lp-form-panel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1.5rem;
+  background: #f8fafc;
+}
+
+.lp-form-inner {
+  width: 100%;
+  max-width: 400px;
+}
+
+.lp-mobile-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #1e1b4b;
+  margin-bottom: 2rem;
+
+  i {
+    font-size: 1.6rem;
+    color: #4f46e5;
+  }
+
+  @media (min-width: 900px) { display: none; }
+}
+
+.lp-form-title {
+  font-size: 1.875rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+  margin-bottom: 0.375rem;
+}
+
+.lp-form-subtitle {
+  font-size: 0.925rem;
+  color: #64748b;
+  margin-bottom: 1.75rem;
+}
+
+// Error banner
+.lp-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.875rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 0.5rem;
+  color: #dc2626;
+  font-size: 0.875rem;
+  margin-bottom: 1.25rem;
+
+  i { flex-shrink: 0; font-size: 1rem; }
+}
+
+// Form fields
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.lp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+
+  label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+  }
+}
+
+.lp-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.lp-input-icon {
+  position: absolute;
+  left: 0.875rem;
+  color: #9ca3af;
+  font-size: 0.95rem;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.lp-input-wrap input {
+  width: 100%;
+  padding: 0.7rem 2.75rem 0.7rem 2.5rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 0.625rem;
+  font-size: 0.9375rem;
+  color: #0f172a;
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  outline: none;
+
+  &::placeholder { color: #cbd5e1; }
+
+  &:focus {
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+  }
+
+  &.is-invalid {
+    border-color: #ef4444;
+
+    &:focus { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12); }
+  }
+}
+
+.lp-eye-btn {
+  position: absolute;
+  right: 0.75rem;
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  font-size: 1rem;
+  line-height: 1;
+  transition: color 0.15s;
+
+  &:hover { color: #4b5563; }
+}
+
+.lp-field-error {
+  font-size: 0.8rem;
+  color: #ef4444;
+}
+
+// Submit button
+.lp-submit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.8rem 1rem;
+  margin-top: 0.25rem;
+  border: none;
+  border-radius: 0.625rem;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  color: #fff;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(79, 70, 229, 0.35);
+  transition: opacity 0.15s, transform 0.12s, box-shadow 0.15s;
+
+  &:hover:not(:disabled) {
+    opacity: 0.93;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(79, 70, 229, 0.45);
+  }
+
+  &:active:not(:disabled) { transform: translateY(0); }
+
+  &:disabled {
+    opacity: 0.68;
+    cursor: not-allowed;
+  }
+}
+
+// Footer
+.lp-footer {
+  text-align: center;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin: 0;
+}

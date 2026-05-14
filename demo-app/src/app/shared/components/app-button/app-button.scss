@@ -1,0 +1,6 @@
+// Make the host element invisible to layout so the inner <button>
+// participates directly in any flex/grid/inline context — identical to
+// using a plain <button> without a wrapper.
+:host {
+  display: contents;
+}

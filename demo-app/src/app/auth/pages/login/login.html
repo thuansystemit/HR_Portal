@@ -1,0 +1,128 @@
+<div class="lp-root">
+
+  <!-- ── Left brand panel ── -->
+  <div class="lp-brand-panel" aria-hidden="true">
+    <div class="lp-brand-inner">
+
+      <div class="lp-logo">
+        <div class="lp-logo-icon"><i class="bi bi-layers-fill"></i></div>
+        <span>DemoApp</span>
+      </div>
+
+      <h1 class="lp-headline">Enterprise<br>document management<br>made simple.</h1>
+
+      <ul class="lp-features">
+        <li>
+          <div class="lp-feat-icon"><i class="bi bi-shield-check-fill"></i></div>
+          <div>
+            <strong>Role-based access</strong>
+            <p>Granular permissions for every team</p>
+          </div>
+        </li>
+        <li>
+          <div class="lp-feat-icon"><i class="bi bi-cloud-arrow-up-fill"></i></div>
+          <div>
+            <strong>Instant uploads</strong>
+            <p>Store and preview PDFs &amp; documents</p>
+          </div>
+        </li>
+        <li>
+          <div class="lp-feat-icon"><i class="bi bi-journal-check"></i></div>
+          <div>
+            <strong>Full audit trail</strong>
+            <p>Complete visibility on every action</p>
+          </div>
+        </li>
+      </ul>
+
+    </div>
+
+    <!-- Decorative blobs -->
+    <div class="lp-blob lp-blob--1"></div>
+    <div class="lp-blob lp-blob--2"></div>
+    <div class="lp-blob lp-blob--3"></div>
+  </div>
+
+  <!-- ── Right form panel ── -->
+  <div class="lp-form-panel">
+    <div class="lp-form-inner">
+
+      <!-- Mobile-only logo -->
+      <div class="lp-mobile-logo">
+        <i class="bi bi-layers-fill"></i>
+        <span>DemoApp</span>
+      </div>
+
+      <h2 class="lp-form-title">Welcome back</h2>
+      <p class="lp-form-subtitle">Sign in to your account to continue</p>
+
+      @if (error()) {
+        <div class="lp-error-banner">
+          <i class="bi bi-exclamation-circle-fill"></i>
+          {{ error() }}
+        </div>
+      }
+
+      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+
+        <!-- Email -->
+        <div class="lp-field">
+          <label for="lp-email">Email address</label>
+          <div class="lp-input-wrap">
+            <i class="bi bi-envelope lp-input-icon"></i>
+            <input
+              id="lp-email"
+              type="email"
+              formControlName="email"
+              [class.is-invalid]="isInvalid('email')"
+              placeholder="you@company.com"
+              autocomplete="email"
+            />
+          </div>
+          @if (isInvalid('email')) {
+            <span class="lp-field-error">Enter a valid email address.</span>
+          }
+        </div>
+
+        <!-- Password -->
+        <div class="lp-field">
+          <label for="lp-password">Password</label>
+          <div class="lp-input-wrap">
+            <i class="bi bi-lock lp-input-icon"></i>
+            <input
+              id="lp-password"
+              [type]="showPwd() ? 'text' : 'password'"
+              formControlName="password"
+              [class.is-invalid]="isInvalid('password')"
+              placeholder="••••••••"
+              autocomplete="current-password"
+            />
+            <button type="button" class="lp-eye-btn"
+                    [attr.aria-label]="showPwd() ? 'Hide password' : 'Show password'"
+                    (click)="showPwd.set(!showPwd())">
+              <i class="bi" [class.bi-eye]="!showPwd()" [class.bi-eye-slash]="showPwd()"></i>
+            </button>
+          </div>
+          @if (isInvalid('password')) {
+            <span class="lp-field-error">Password is required.</span>
+          }
+        </div>
+
+        <!-- Submit -->
+        <button type="submit" class="lp-submit-btn" [disabled]="loading()">
+          @if (loading()) {
+            <span class="spinner-border spinner-border-sm"></span>
+            Signing in…
+          } @else {
+            <i class="bi bi-box-arrow-in-right"></i>
+            Sign In
+          }
+        </button>
+
+      </form>
+
+      <p class="lp-footer">&copy; {{ year }} DemoApp. All rights reserved.</p>
+    </div>
+  </div>
+
+</div>

@@ -1,0 +1,136 @@
+<app-page-layout title="Settings" subtitle="Manage application preferences and configuration.">
+
+  @if (saved()) {
+    <div class="alert alert-success d-flex align-items-center gap-2 py-2 mb-4">
+      <i class="bi bi-check-circle-fill"></i>
+      Settings saved successfully.
+    </div>
+  }
+
+  <form [formGroup]="form" (ngSubmit)="save()">
+    <div class="row g-4">
+
+      <!-- Left column -->
+      <div class="col-12 col-lg-6 d-flex flex-column gap-4">
+
+        <!-- Appearance -->
+        <app-form-card title="Appearance">
+          <p class="text-muted small mb-3">Choose the colour theme for the application.</p>
+          <div class="d-flex gap-2 flex-wrap">
+            @for (t of themes; track t.value) {
+              <label
+                class="theme-option flex-fill"
+                [class.theme-option--active]="form.get('theme')?.value === t.value"
+              >
+                <input type="radio" formControlName="theme" [value]="t.value" class="visually-hidden" />
+                <i class="bi {{ t.icon }} fs-4 d-block mb-1"></i>
+                <span class="small fw-semibold">{{ t.label }}</span>
+              </label>
+            }
+          </div>
+        </app-form-card>
+
+        <!-- Localization -->
+        <app-form-card title="Localization">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label fw-semibold">Language</label>
+              <select class="form-select" formControlName="language">
+                @for (lang of languages; track lang.value) {
+                  <option [value]="lang.value">{{ lang.label }}</option>
+                }
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Date Format</label>
+              <select class="form-select" formControlName="dateFormat">
+                @for (fmt of dateFormats; track fmt.value) {
+                  <option [value]="fmt.value">{{ fmt.label }}</option>
+                }
+              </select>
+            </div>
+          </div>
+        </app-form-card>
+
+      </div>
+
+      <!-- Right column -->
+      <div class="col-12 col-lg-6 d-flex flex-column gap-4">
+
+        <!-- Tables -->
+        <app-form-card title="Data Tables">
+          <p class="text-muted small mb-3">Default number of rows shown per page in all tables.</p>
+          <div class="d-flex gap-2 flex-wrap">
+            @for (ps of pageSizes; track ps.value) {
+              <label
+                class="page-size-option"
+                [class.page-size-option--active]="form.get('tablePageSize')?.value == ps.value"
+              >
+                <input type="radio" formControlName="tablePageSize" [value]="ps.value" class="visually-hidden" />
+                {{ ps.label }}
+              </label>
+            }
+          </div>
+        </app-form-card>
+
+        <!-- Notifications -->
+        <app-form-card title="Notifications">
+          <p class="text-muted small mb-3">Choose which notifications you want to receive.</p>
+          <div class="d-flex flex-column gap-3">
+
+            <div class="d-flex align-items-center justify-content-between">
+              <div>
+                <div class="fw-semibold small">Email Notifications</div>
+                <div class="text-muted" style="font-size:.75rem">Receive updates and alerts by email.</div>
+              </div>
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch"
+                       formControlName="emailNotifications" id="sw-email" />
+              </div>
+            </div>
+
+            <hr class="my-0" />
+
+            <div class="d-flex align-items-center justify-content-between">
+              <div>
+                <div class="fw-semibold small">Push Notifications</div>
+                <div class="text-muted" style="font-size:.75rem">Receive push notifications on mobile.</div>
+              </div>
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch"
+                       formControlName="pushNotifications" id="sw-push" />
+              </div>
+            </div>
+
+            <hr class="my-0" />
+
+            <div class="d-flex align-items-center justify-content-between">
+              <div>
+                <div class="fw-semibold small">Desktop Notifications</div>
+                <div class="text-muted" style="font-size:.75rem">Show browser desktop notifications.</div>
+              </div>
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch"
+                       formControlName="desktopNotifications" id="sw-desktop" />
+              </div>
+            </div>
+
+          </div>
+        </app-form-card>
+
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
+      <app-btn variant="outline-secondary" icon="bi-arrow-counterclockwise" (btnClick)="reset()">
+        Reset to Defaults
+      </app-btn>
+      <app-btn type="submit" icon="bi-floppy" [loading]="saving()">
+        Save Settings
+      </app-btn>
+    </div>
+
+  </form>
+
+</app-page-layout>

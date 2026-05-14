@@ -1,0 +1,27 @@
+<button
+  [type]="type()"
+  [class]="btnClass()"
+  [disabled]="isDisabled()"
+  (click)="handleClick($event)"
+>
+  @if (loading()) {
+    <span
+      class="spinner-border spinner-border-sm"
+      [class.me-2]="!iconOnly()"
+      aria-hidden="true"
+    ></span>
+  } @else if (icon()) {
+    <i
+      class="bi"
+      [class]="icon()"
+      [class.me-2]="!iconOnly()"
+      aria-hidden="true"
+    ></i>
+  }
+
+  <ng-content />
+
+  @if (iconEnd() && !loading()) {
+    <i class="bi ms-2" [class]="iconEnd()" aria-hidden="true"></i>
+  }
+</button>

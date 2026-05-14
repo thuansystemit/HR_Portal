@@ -1,0 +1,60 @@
+<app-page-layout title="Roles Management" subtitle="Define roles and their access permissions.">
+  <ng-container actions>
+    @if (auth.can('rolesEdit')) {
+      <app-btn size="sm" icon="bi-shield-plus" (btnClick)="openAdd()">Add Role</app-btn>
+    }
+  </ng-container>
+
+  <app-data-table
+    [columns]="columns()"
+    [data]="store.roles()"
+    [loading]="store.loading()"
+    [pageSize]="pageSize"
+    [showPagination]="false"
+    [controlledPage]="page()"
+    (stateChange)="onStateChange($event)"
+    emptyMessage="No roles found."
+  />
+
+  <app-divider spacing="sm" thickness="0px" />
+
+  <app-pagination
+    [page]="page()"
+    [pageCount]="pageCount()"
+    [total]="total()"
+    [pageSize]="pageSize"
+    (pageChange)="page.set($event)"
+  />
+</app-page-layout>
+
+<!-- Name cell: name + built-in badge -->
+<ng-template #nameTpl let-value let-row="row">
+  <span class="me-2">{{ value }}</span>
+  @if ($any(row).builtIn) {
+    <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">built-in</span>
+  }
+</ng-template>
+
+<!-- Permissions cell: X / N pill -->
+<ng-template #permTpl let-row="row">
+  <span
+    class="badge rounded-pill"
+    [ngClass]="permCount(row) === totalPermissions ? 'bg-success-subtle text-success-emphasis' : 'bg-primary-subtle text-primary-emphasis'"
+  >
+    {{ permCount(row) }} / {{ totalPermissions }}
+  </span>
+</ng-template>
+
+<!-- Actions cell -->
+<ng-template #actionsTpl let-row="row">
+  <div class="d-flex justify-content-center gap-2">
+    @if (auth.can('rolesEdit')) {
+      <app-btn size="sm" variant="outline-primary" icon="bi-pencil" [iconOnly]="true"
+               title="Edit" (btnClick)="edit(row)" />
+      <app-btn size="sm" variant="outline-danger" icon="bi-trash" [iconOnly]="true"
+               title="Delete" [disabled]="$any(row).builtIn" (btnClick)="confirmDelete(row)" />
+    } @else {
+      <span class="text-muted small">View only</span>
+    }
+  </div>
+</ng-template>

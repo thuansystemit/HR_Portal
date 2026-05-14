@@ -1,0 +1,116 @@
+.dd {
+  position: relative;
+
+  // ── Trigger ──────────────────────────────────────────────────
+  &__trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.375rem 0.75rem;
+    font-size: var(--bs-body-font-size, 0.9rem);
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--bs-body-color);
+    background-color: var(--bs-body-bg, #fff);
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+
+    &:focus {
+      outline: 0;
+      border-color: var(--bs-primary);
+      box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.25);
+    }
+  }
+
+  &__arrow {
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    color: var(--bs-secondary-color);
+  }
+
+  &__placeholder {
+    color: var(--bs-secondary-color);
+  }
+
+  // ── Menu ─────────────────────────────────────────────────────
+  &__menu {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    background-color: var(--bs-body-bg, #fff);
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+
+  &__search {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--bs-border-color);
+  }
+
+  &__list {
+    list-style: none;
+    margin: 0;
+    padding: 0.25rem 0;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 0.45rem 0.85rem;
+    font-size: var(--bs-body-font-size, 0.9rem);
+    color: var(--bs-body-color);
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+
+    &:hover:not(:disabled) {
+      background-color: var(--bs-tertiary-bg, #f8f9fa);
+    }
+
+    &--active {
+      color: var(--bs-primary);
+      font-weight: 500;
+      background-color: rgba(var(--bs-primary-rgb), 0.06);
+    }
+
+    &--disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &__empty {
+    padding: 0.6rem 0.85rem;
+    color: var(--bs-secondary-color);
+    font-size: 0.85rem;
+  }
+
+  // ── States ───────────────────────────────────────────────────
+  &--invalid > .dd__trigger {
+    border-color: var(--bs-danger);
+
+    &:focus {
+      box-shadow: 0 0 0 0.25rem rgba(var(--bs-danger-rgb), 0.25);
+    }
+  }
+
+  &--disabled > .dd__trigger {
+    opacity: 0.65;
+    cursor: not-allowed;
+    background-color: var(--bs-secondary-bg, #e9ecef);
+  }
+}

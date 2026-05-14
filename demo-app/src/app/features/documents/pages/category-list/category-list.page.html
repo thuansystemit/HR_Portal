@@ -1,0 +1,60 @@
+<app-page-layout title="Document Management" subtitle="Manage document categories and role-based access.">
+  <ng-container actions>
+    @if (auth.can('rolesEdit')) {
+      <app-btn size="sm" icon="bi-folder-plus" (btnClick)="openAdd()">Add Category</app-btn>
+    }
+  </ng-container>
+
+  <app-data-table
+    [columns]="columns()"
+    [data]="visibleCategories()"
+    [loading]="store.loading()"
+    [pageSize]="pageSize"
+    [showPagination]="false"
+    [controlledPage]="page()"
+    (stateChange)="onStateChange($event)"
+    emptyMessage="No categories found."
+  />
+
+  <app-divider spacing="sm" thickness="0px" />
+
+  <app-pagination
+    [page]="page()"
+    [pageCount]="pageCount()"
+    [total]="total()"
+    [pageSize]="pageSize"
+    (pageChange)="page.set($event)"
+  />
+</app-page-layout>
+
+<!-- Document type badge -->
+<ng-template #typeTpl let-value>
+  @if (value === 'CV') {
+    <span class="badge bg-info text-white">CV</span>
+  } @else if (value === 'INVOICE') {
+    <span class="badge bg-success">Invoice</span>
+  }
+</ng-template>
+
+<!-- Permissions cell -->
+<ng-template #permTpl let-value let-row="row">
+  <app-category-perm-cell [permissions]="$any(value)" />
+</ng-template>
+
+<!-- Actions cell -->
+<ng-template #actionsTpl let-row="row">
+  <div class="d-flex justify-content-center gap-2">
+    @if ($any(row).documentType === 'CV') {
+      <app-btn size="sm" variant="outline-info" icon="bi-people" [iconOnly]="true"
+               title="View Candidates" (btnClick)="openCandidates(row)" />
+    }
+    <app-btn size="sm" variant="outline-secondary" icon="bi-folder2-open" [iconOnly]="true"
+             title="View Documents" (btnClick)="openDocuments(row)" />
+    @if (auth.can('rolesEdit')) {
+      <app-btn size="sm" variant="outline-primary" icon="bi-pencil" [iconOnly]="true"
+               title="Edit" (btnClick)="edit(row)" />
+      <app-btn size="sm" variant="outline-danger" icon="bi-trash" [iconOnly]="true"
+               title="Delete" (btnClick)="confirmDelete(row)" />
+    }
+  </div>
+</ng-template>

@@ -1,0 +1,62 @@
+<nav class="topbar navbar px-3 py-2 d-flex align-items-center justify-content-between">
+  <button class="btn btn-sm btn-outline-secondary border-0" type="button" (click)="layout.toggle()">
+    <i class="bi bi-list fs-5"></i>
+  </button>
+
+  <div class="d-flex align-items-center gap-3">
+    <!-- Notifications -->
+    <button class="btn btn-sm btn-outline-secondary border-0 position-relative" type="button">
+      <i class="bi bi-bell fs-5"></i>
+      <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+            style="font-size:.6rem">3</span>
+    </button>
+
+    <!-- User menu -->
+    <div class="hdr-menu" [class.hdr-menu--open]="menuOpen()">
+      <button
+        class="hdr-trigger btn btn-sm btn-outline-secondary border-0 d-flex align-items-center gap-2"
+        type="button"
+        (click)="toggleMenu()"
+        [attr.aria-expanded]="menuOpen()"
+      >
+        <img [src]="avatarUrl()" class="rounded-circle" width="30" height="30" alt="avatar" />
+        <span class="d-none d-md-inline small fw-semibold">{{ auth.user()?.name }}</span>
+        <span class="d-none d-lg-inline badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle small">
+          {{ auth.user()?.roleName }}
+        </span>
+        <i class="bi small" [ngClass]="menuOpen() ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+      </button>
+
+      <div class="hdr-dropdown shadow-sm">
+        <!-- User info header -->
+        <div class="d-flex align-items-center gap-3 px-3 py-3 border-bottom">
+          <img [src]="avatarUrl()" class="rounded-circle flex-shrink-0" width="40" height="40" alt="avatar" />
+          <div class="overflow-hidden">
+            <div class="fw-semibold small text-truncate">{{ auth.user()?.name }}</div>
+            <div class="text-muted text-truncate" style="font-size:.72rem">{{ auth.user()?.email }}</div>
+            <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle mt-1" style="font-size:.65rem">
+              {{ auth.user()?.roleName }}
+            </span>
+          </div>
+        </div>
+        <!-- Actions -->
+        <div class="py-1">
+          <a class="dropdown-item py-2" routerLink="/profile" (click)="menuOpen.set(false)">
+            <i class="bi bi-person me-2"></i>Profile
+          </a>
+          @if (auth.can('rolesEdit')) {
+            <a class="dropdown-item py-2" routerLink="/settings" (click)="menuOpen.set(false)">
+              <i class="bi bi-gear me-2"></i>Settings
+            </a>
+          }
+          <div class="dropdown-divider my-1"></div>
+          <app-btn variant="link" icon="bi-box-arrow-right" [flat]="true"
+                   class="dropdown-item py-2 text-danger w-100 text-start px-0"
+                   (btnClick)="auth.logout()">
+            Logout
+          </app-btn>
+        </div>
+      </div>
+    </div>
+  </div>
+</nav>

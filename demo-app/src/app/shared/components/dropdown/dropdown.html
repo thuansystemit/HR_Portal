@@ -1,0 +1,62 @@
+<div class="dd" [class.dd--open]="isOpen()" [class.dd--disabled]="isDisabled()" [class.dd--invalid]="isInvalid">
+
+  <!-- Trigger -->
+  <button
+    class="dd__trigger"
+    type="button"
+    [attr.aria-expanded]="isOpen()"
+    [attr.aria-haspopup]="'listbox'"
+    [disabled]="isDisabled() || null"
+    (click)="toggle()"
+  >
+    <span [class.dd__placeholder]="!hasValue()">
+      {{ hasValue() ? selectedLabel() : placeholder() }}
+    </span>
+    <i class="bi dd__arrow" [class.bi-chevron-up]="isOpen()" [class.bi-chevron-down]="!isOpen()"></i>
+  </button>
+
+  <!-- Menu -->
+  @if (isOpen()) {
+    <div class="dd__menu" role="listbox">
+
+      <!-- Optional search -->
+      @if (searchable()) {
+        <div class="dd__search">
+          <input
+            class="form-control form-control-sm"
+            type="text"
+            placeholder="Search…"
+            autocomplete="off"
+            [value]="searchTerm()"
+            (input)="onSearch($any($event.target).value)"
+          />
+        </div>
+      }
+
+      <!-- Options list -->
+      <ul class="dd__list" role="listbox">
+        @for (opt of filteredOptions(); track $index) {
+          <li role="option" [attr.aria-selected]="opt.value === value()">
+            <button
+              class="dd__item"
+              type="button"
+              [class.dd__item--active]="opt.value === value()"
+              [class.dd__item--disabled]="opt.disabled"
+              [disabled]="opt.disabled || null"
+              (click)="select(opt)"
+            >
+              {{ opt.label }}
+              @if (opt.value === value()) {
+                <i class="bi bi-check2 ms-auto"></i>
+              }
+            </button>
+          </li>
+        } @empty {
+          <li class="dd__empty">No options found.</li>
+        }
+      </ul>
+
+    </div>
+  }
+
+</div>

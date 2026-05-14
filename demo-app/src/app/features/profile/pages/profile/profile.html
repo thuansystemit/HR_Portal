@@ -1,0 +1,148 @@
+<app-page-layout title="My Profile" subtitle="Manage your account information and password.">
+
+  <div class="row g-4">
+
+    <!-- Left: identity card -->
+    <div class="col-12 col-lg-4">
+      <div class="card h-100 text-center p-4">
+        <div class="mb-3">
+          <img
+            [src]="avatarUrl()"
+            class="rounded-circle border border-3 border-primary-subtle"
+            width="96" height="96"
+            alt="avatar"
+          />
+        </div>
+        <h5 class="fw-semibold mb-1">{{ auth.user()?.name }}</h5>
+        <p class="text-muted small mb-3">{{ auth.user()?.email }}</p>
+        <span class="badge {{ roleBadgeClass() }} px-3 py-2 fs-6 d-inline-block mx-auto">
+          {{ auth.user()?.roleName }}
+        </span>
+
+        <hr class="my-4" />
+
+        <div class="d-flex flex-column gap-2 text-start">
+          <div class="d-flex justify-content-between small">
+            <span class="text-muted">Role ID</span>
+            <span class="fw-medium">#{{ auth.user()?.roleId }}</span>
+          </div>
+          <div class="d-flex justify-content-between small">
+            <span class="text-muted">User ID</span>
+            <span class="fw-medium">#{{ auth.user()?.id }}</span>
+          </div>
+        </div>
+
+        <div class="mt-4">
+          <app-btn variant="outline-danger" size="sm" icon="bi-box-arrow-right" [block]="true" (btnClick)="auth.logout()">
+            Logout
+          </app-btn>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: edit forms -->
+    <div class="col-12 col-lg-8 d-flex flex-column gap-4">
+
+      <!-- Account information -->
+      <app-form-card title="Account Information">
+        @if (infoSuccess()) {
+          <div class="alert alert-success py-2 small">
+            <i class="bi bi-check-circle me-2"></i>Name updated successfully.
+          </div>
+        }
+        <form [formGroup]="infoForm" (ngSubmit)="saveInfo()">
+          <div class="row g-3">
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold" for="pf-name">Display Name</label>
+              <input
+                id="pf-name"
+                class="form-control"
+                [class.is-invalid]="isInvalid('info', 'name')"
+                formControlName="name"
+                placeholder="Your full name"
+              />
+              <div class="invalid-feedback">Name is required (min 2 characters).</div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold">Email</label>
+              <input class="form-control" [value]="auth.user()?.email" disabled />
+              <div class="form-text">Email cannot be changed.</div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold">Role</label>
+              <input class="form-control" [value]="auth.user()?.roleName" disabled />
+              <div class="form-text">Roles are managed by administrators.</div>
+            </div>
+          </div>
+          <div class="mt-3 d-flex justify-content-end">
+            <app-btn type="submit" icon="bi-floppy" [loading]="infoSaving()">
+              Save Changes
+            </app-btn>
+          </div>
+        </form>
+      </app-form-card>
+
+      <!-- Change password -->
+      <app-form-card title="Change Password">
+        @if (pwSuccess()) {
+          <div class="alert alert-success py-2 small">
+            <i class="bi bi-check-circle me-2"></i>Password changed successfully.
+          </div>
+        }
+        @if (pwError()) {
+          <div class="alert alert-danger py-2 small">{{ pwError() }}</div>
+        }
+        <form [formGroup]="pwForm" (ngSubmit)="savePassword()">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label fw-semibold" for="pf-current">Current Password</label>
+              <input
+                id="pf-current"
+                type="password"
+                class="form-control"
+                [class.is-invalid]="isInvalid('pw', 'current')"
+                formControlName="current"
+                placeholder="Enter current password"
+                autocomplete="current-password"
+              />
+              <div class="invalid-feedback">Current password is required.</div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold" for="pf-next">New Password</label>
+              <input
+                id="pf-next"
+                type="password"
+                class="form-control"
+                [class.is-invalid]="isInvalid('pw', 'next')"
+                formControlName="next"
+                placeholder="Min 6 characters"
+                autocomplete="new-password"
+              />
+              <div class="invalid-feedback">New password must be at least 6 characters.</div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold" for="pf-confirm">Confirm New Password</label>
+              <input
+                id="pf-confirm"
+                type="password"
+                class="form-control"
+                [class.is-invalid]="isInvalid('pw', 'confirm')"
+                formControlName="confirm"
+                placeholder="Repeat new password"
+                autocomplete="new-password"
+              />
+              <div class="invalid-feedback">Please confirm your new password.</div>
+            </div>
+          </div>
+          <div class="mt-3 d-flex justify-content-end">
+            <app-btn type="submit" variant="warning" icon="bi-shield-lock" [loading]="pwSaving()">
+              Change Password
+            </app-btn>
+          </div>
+        </form>
+      </app-form-card>
+
+    </div>
+  </div>
+
+</app-page-layout>

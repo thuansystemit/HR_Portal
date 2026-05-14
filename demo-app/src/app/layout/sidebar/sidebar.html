@@ -1,0 +1,30 @@
+<aside class="sidebar d-flex flex-column">
+
+  <div class="sidebar-header p-3 pb-2">
+    <a class="sidebar-brand d-flex align-items-center gap-2 text-white fw-bold fs-5 text-decoration-none"
+       href="#" (click)="$event.preventDefault()">
+      <i class="bi bi-layers-fill text-primary flex-shrink-0"></i>
+      <span class="sidebar-label">DemoApp</span>
+    </a>
+  </div>
+
+  <nav class="flex-grow-1 px-2 py-1">
+    @for (item of navItems(); track item.route) {
+      <a
+        class="nav-link d-flex align-items-center gap-2 px-3 py-2 mb-1"
+        [routerLink]="item.route"
+        routerLinkActive="active"
+        [title]="item.label"
+        (click)="layout.close()"
+      >
+        <i class="bi {{ item.icon }} flex-shrink-0"></i>
+        <span class="sidebar-label">{{ item.label }}</span>
+      </a>
+    }
+  </nav>
+
+  <div class="sidebar-footer border-top border-secondary p-3">
+    <small class="text-muted sidebar-label">v1.0.0</small>
+  </div>
+
+</aside>

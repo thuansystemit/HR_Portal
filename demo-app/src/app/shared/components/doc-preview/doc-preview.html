@@ -1,0 +1,54 @@
+@switch (mode()) {
+
+  @case ('pdf') {
+    <iframe class="dp-frame" [src]="pdfSrc()" title="Document Preview"></iframe>
+  }
+
+  @case ('docx') {
+    @if (loading()) {
+      <div class="dp-center">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Rendering…</span>
+        </div>
+        <span class="ms-3 text-muted">Rendering document…</span>
+      </div>
+    }
+    @if (hasError()) {
+      <div class="dp-center">
+        <i class="bi bi-exclamation-triangle-fill text-warning dp-icon"></i>
+        <p class="mt-3 text-muted">Could not render this document.</p>
+        <button class="btn btn-outline-primary" type="button" (click)="download()">
+          <i class="bi bi-download me-2"></i>Download instead
+        </button>
+      </div>
+    }
+    <div
+      #docxContainer
+      class="dp-docx-scroll"
+      [ngClass]="{ 'd-none': loading() || hasError() }"
+    ></div>
+  }
+
+  @case ('doc') {
+    <div class="dp-center">
+      <i class="bi bi-file-earmark-word text-primary dp-icon"></i>
+      <p class="mt-3 text-muted">
+        <strong>.doc</strong> format cannot be previewed in the browser.
+      </p>
+      <button class="btn btn-primary" type="button" (click)="download()">
+        <i class="bi bi-download me-2"></i>Download to view
+      </button>
+    </div>
+  }
+
+  @default {
+    <div class="dp-center">
+      <i class="bi bi-file-earmark text-secondary dp-icon"></i>
+      <p class="mt-3 text-muted">Preview not available for this file type.</p>
+      <button class="btn btn-outline-secondary" type="button" (click)="download()">
+        <i class="bi bi-download me-2"></i>Download
+      </button>
+    </div>
+  }
+
+}

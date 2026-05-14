@@ -1,0 +1,26 @@
+:host {
+  display: block;
+}
+
+.access-denied {
+  min-height: calc(100vh - 120px);
+}
+
+.access-denied-icon {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: rgba(var(--bs-danger-rgb), 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  i {
+    font-size: 3rem;
+    color: var(--bs-danger);
+  }
+}
+
+h1 {
+  font-size: 2rem;
+}

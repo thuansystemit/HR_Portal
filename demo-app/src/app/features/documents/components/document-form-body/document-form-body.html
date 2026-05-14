@@ -1,0 +1,66 @@
+@if (store.error()) {
+  <div class="alert alert-danger py-2 mb-3">{{ store.error() }}</div>
+}
+
+<div class="row g-3">
+
+  <!-- Document name -->
+  <div class="col-12 col-sm-6">
+    <label class="form-label fw-semibold" for="dfb-name">Document Name</label>
+    <input
+      id="dfb-name"
+      class="form-control"
+      [class.is-invalid]="isInvalid('name')"
+      [formControl]="$any(form.get('name'))"
+      placeholder="e.g. Q3 Report"
+    />
+    <div class="invalid-feedback">Document name is required (min 2 characters).</div>
+  </div>
+
+  <!-- File upload -->
+  <div class="col-12">
+    <label class="form-label fw-semibold">File <span class="text-muted fw-normal">(PDF, DOC, DOCX · max 50 MB)</span></label>
+
+    <div
+      class="dfb-dropzone"
+      [class.dfb-dropzone--invalid]="fileTypeError() || fileSizeError() || isInvalid('fileName')"
+      [class.dfb-dropzone--selected]="selectedFile()"
+      (dragover)="$event.preventDefault()"
+      (drop)="onFileDrop($event)"
+    >
+      <input
+        #fileInput
+        type="file"
+        accept=".pdf,.doc,.docx"
+        class="dfb-file-input"
+        (change)="onFileChange($event)"
+      />
+
+      @if (selectedFile(); as f) {
+        <div class="dfb-file-info">
+          <i class="bi bi-file-earmark-check dfb-file-icon text-success"></i>
+          <div class="dfb-file-meta">
+            <span class="dfb-file-name">{{ f.name }}</span>
+            <span class="dfb-file-size text-muted">{{ formatFileSize(f.size) }}</span>
+          </div>
+          <app-btn size="sm" variant="outline-danger" icon="bi-x-lg" [iconOnly]="true" [flat]="true"
+                   class="ms-auto p-0 border-0" title="Remove file" (btnClick)="clearFile(fileInput)" />
+        </div>
+      } @else {
+        <div class="dfb-prompt">
+          <i class="bi bi-cloud-upload dfb-prompt-icon"></i>
+          <span>Drop file here or <strong>click to browse</strong></span>
+        </div>
+      }
+    </div>
+
+    @if (fileTypeError()) {
+      <div class="text-danger small mt-1">Only PDF, DOC, and DOCX files are allowed.</div>
+    } @else if (fileSizeError()) {
+      <div class="text-danger small mt-1">File exceeds the 50 MB limit.</div>
+    } @else if (isInvalid('fileName')) {
+      <div class="text-danger small mt-1">Please select a file to upload.</div>
+    }
+  </div>
+
+</div>

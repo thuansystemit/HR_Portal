@@ -1,0 +1,53 @@
+<app-page-layout title="CV Candidates" subtitle="Extracted profiles from CV documents in this category.">
+  <ng-container actions>
+    <a class="btn btn-sm btn-outline-secondary" routerLink="/documents">
+      <i class="bi bi-arrow-left me-1"></i> Documents
+    </a>
+  </ng-container>
+
+  @if (store.error()) {
+    <div class="alert alert-danger">{{ store.error() }}</div>
+  }
+
+  <app-data-table
+    [columns]="columns()"
+    [data]="store.candidates()"
+    [loading]="store.loading()"
+    [pageSize]="pageSize"
+    [showPagination]="false"
+    [controlledPage]="page()"
+    (stateChange)="onStateChange($event)"
+    emptyMessage="No CV candidates found for this category."
+  />
+
+  <app-divider spacing="sm" thickness="0px" />
+
+  <app-pagination
+    [page]="page()"
+    [pageCount]="pageCount()"
+    [total]="total()"
+    [pageSize]="pageSize"
+    (pageChange)="page.set($event)"
+  />
+</app-page-layout>
+
+<!-- Confidence badge -->
+<ng-template #confidenceTpl let-value>
+  @if (value === 'HIGH') {
+    <span class="badge bg-success">High</span>
+  } @else if (value === 'MEDIUM') {
+    <span class="badge bg-warning text-dark">Medium</span>
+  } @else if (value === 'LOW') {
+    <span class="badge bg-danger">Low</span>
+  }
+</ng-template>
+
+<!-- Actions cell -->
+<ng-template #actionsTpl let-row="row">
+  <div class="d-flex justify-content-center gap-2">
+    <app-btn size="sm" variant="outline-info" icon="bi-person-circle" [iconOnly]="true"
+             title="View Profile" (btnClick)="viewProfile(row)" />
+    <app-btn size="sm" variant="outline-danger" icon="bi-trash" [iconOnly]="true"
+             title="Delete" (btnClick)="confirmDelete(row)" />
+  </div>
+</ng-template>

@@ -1,0 +1,79 @@
+.dfb-dropzone {
+  position: relative;
+  border: 2px dashed var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  padding: 1.25rem 1rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+
+  &:hover {
+    border-color: var(--bs-primary);
+    background-color: rgba(var(--bs-primary-rgb), 0.03);
+  }
+
+  &--invalid {
+    border-color: var(--bs-danger);
+  }
+
+  &--selected {
+    border-style: solid;
+    border-color: var(--bs-success);
+    background-color: rgba(var(--bs-success-rgb), 0.04);
+  }
+}
+
+.dfb-file-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.dfb-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--bs-secondary-color);
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+.dfb-prompt-icon {
+  font-size: 2rem;
+  color: var(--bs-secondary-color);
+}
+
+.dfb-file-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  pointer-events: none;
+
+  button { pointer-events: auto; position: relative; z-index: 2; }
+}
+
+.dfb-file-icon {
+  font-size: 1.75rem;
+  flex-shrink: 0;
+}
+
+.dfb-file-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dfb-file-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dfb-file-size {
+  font-size: 0.8rem;
+}

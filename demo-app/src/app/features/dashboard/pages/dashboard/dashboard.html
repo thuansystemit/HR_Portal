@@ -1,0 +1,50 @@
+<app-page-layout title="Dashboard" subtitle="Welcome back — here's your quick overview.">
+
+  <!-- Welcome banner -->
+  <div class="card mb-4 border-0 bg-primary text-white p-4">
+    <div class="d-flex align-items-center gap-3">
+      <img [src]="avatarUrl()" class="rounded-circle border border-2 border-white" width="64" height="64" alt="avatar" />
+      <div>
+        <h5 class="fw-bold mb-1">Hello, {{ auth.user()?.name }}!</h5>
+        <span class="badge bg-white text-primary fw-semibold">{{ auth.user()?.roleName }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats row -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card text-center p-3 h-100">
+        <div class="fs-2 fw-bold text-primary">{{ visibleCategories().length }}</div>
+        <div class="text-muted small">Accessible Categories</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card text-center p-3 h-100">
+        <div class="fs-2 fw-bold text-success">{{ auth.user()?.roleName }}</div>
+        <div class="text-muted small">Your Role</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick access cards -->
+  <h6 class="fw-semibold text-muted mb-3 text-uppercase" style="font-size:.75rem;letter-spacing:.05em">Quick Access</h6>
+  <div class="row g-3">
+    @for (card of cards(); track card.route) {
+      <div class="col-12 col-sm-6 col-lg-4">
+        <a [routerLink]="card.route" class="card text-decoration-none h-100 dash-card">
+          <div class="card-body d-flex gap-3 align-items-start">
+            <div class="dash-card-icon bg-{{ card.color }}-subtle text-{{ card.color }} rounded-3 p-3">
+              <i class="bi {{ card.icon }} fs-4"></i>
+            </div>
+            <div>
+              <div class="fw-semibold text-body">{{ card.title }}</div>
+              <div class="text-muted small mt-1">{{ card.desc }}</div>
+            </div>
+          </div>
+        </a>
+      </div>
+    }
+  </div>
+
+</app-page-layout>

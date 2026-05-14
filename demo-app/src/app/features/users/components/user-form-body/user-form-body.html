@@ -1,0 +1,84 @@
+@if (store.error()) {
+  <div class="alert alert-danger py-2 mb-3">{{ store.error() }}</div>
+}
+
+@if (store.loading()) {
+  <div class="d-flex justify-content-center py-3">
+    <span class="spinner-border text-primary"></span>
+  </div>
+} @else {
+  <div class="row g-3">
+
+    <!-- Name -->
+    <div class="col-12 col-sm-6">
+      <label class="form-label fw-semibold" for="ufb-name">Full Name</label>
+      <input
+        id="ufb-name"
+        class="form-control"
+        [class.is-invalid]="isInvalid('name')"
+        [formControl]="$any(form.get('name'))"
+        placeholder="e.g. John Smith"
+      />
+      <div class="invalid-feedback">Name is required (min 2 characters).</div>
+    </div>
+
+    <!-- Email -->
+    <div class="col-12 col-sm-6">
+      <label class="form-label fw-semibold" for="ufb-email">Email Address</label>
+      <input
+        id="ufb-email"
+        type="email"
+        class="form-control"
+        [class.is-invalid]="isInvalid('email')"
+        [formControl]="$any(form.get('email'))"
+        placeholder="e.g. john@example.com"
+      />
+      <div class="invalid-feedback">A valid email address is required.</div>
+    </div>
+
+    <!-- Password (create only) -->
+    @if (!isEdit) {
+      <div class="col-12 col-sm-6">
+        <label class="form-label fw-semibold" for="ufb-password">Password</label>
+        <input
+          id="ufb-password"
+          type="password"
+          class="form-control"
+          [class.is-invalid]="isInvalid('password')"
+          [formControl]="$any(form.get('password'))"
+          placeholder="Minimum 8 characters"
+          autocomplete="new-password"
+        />
+        <div class="invalid-feedback">Password must be at least 8 characters.</div>
+      </div>
+    }
+
+    <!-- Role -->
+    <div class="col-12 col-sm-6">
+      <label class="form-label fw-semibold">Role</label>
+      <app-dropdown
+        [formControl]="$any(form.get('roleId'))"
+        [options]="roleOptions"
+        placeholder="Select role…"
+      />
+      @if (isInvalid('roleId')) {
+        <div class="invalid-msg">Please select a role.</div>
+      }
+    </div>
+
+    <!-- Status -->
+    <div class="col-12 col-sm-6">
+      <label class="form-label fw-semibold">Status</label>
+      <app-dropdown
+        [formControl]="$any(form.get('status'))"
+        [options]="statusOptions"
+        placeholder="Select status…"
+        [searchable]="true"
+      />
+      @if (isInvalid('status')) {
+        <div class="invalid-msg">Please select a status.</div>
+      }
+    </div>
+
+  </div>
+}

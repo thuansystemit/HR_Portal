@@ -1,0 +1,386 @@
+<app-page-layout
+  [title]="candidate()?.fullName ?? 'Candidate Profile'"
+  subtitle="Extracted CV profile."
+>
+  <ng-container actions>
+    <button class="btn btn-sm btn-outline-secondary" (click)="goBack()">
+      <i class="bi bi-arrow-left me-1"></i> Back to Candidates
+    </button>
+  </ng-container>
+
+  @if (store.loading()) {
+    <div class="d-flex justify-content-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading…</span>
+      </div>
+    </div>
+  }
+
+  @if (store.error()) {
+    <div class="alert alert-danger">{{ store.error() }}</div>
+  }
+
+  @if (candidate(); as cv) {
+
+    <!-- ── Header card ──────────────────────────────────────────────────── -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
+          <div>
+            <h5 class="card-title mb-1 fw-bold">{{ cv.fullName }}</h5>
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+              @if (cv.confidenceOverall === 'HIGH') {
+                <span class="badge bg-success">High Confidence</span>
+              } @else if (cv.confidenceOverall === 'MEDIUM') {
+                <span class="badge bg-warning text-dark">Medium Confidence</span>
+              } @else {
+                <span class="badge bg-danger">Low Confidence</span>
+              }
+              @if (cv.rawLanguage) {
+                <span class="badge bg-secondary">{{ cv.rawLanguage | titlecase }}</span>
+              }
+            </div>
+
+            <div class="d-flex flex-wrap gap-3 text-muted small">
+              @if (cv.email) {
+                <span><i class="bi bi-envelope me-1"></i>{{ cv.email }}</span>
+              }
+              @if (cv.phone) {
+                <span><i class="bi bi-telephone me-1"></i>{{ cv.phone }}</span>
+              }
+              @if (cv.city || cv.country) {
+                <span>
+                  <i class="bi bi-geo-alt me-1"></i>
+                  @if (cv.city && cv.country) { {{ cv.city }}, {{ cv.country }} }
+                  @else { {{ cv.city ?? cv.country }} }
+                </span>
+              }
+            </div>
+          </div>
+
+          <div class="d-flex flex-column gap-2 align-items-end">
+            @if (cv.linkedinUrl) {
+              <a [href]="cv.linkedinUrl" target="_blank" rel="noopener noreferrer"
+                 class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-linkedin me-1"></i>LinkedIn
+              </a>
+            }
+            @if (cv.githubUrl) {
+              <a [href]="cv.githubUrl" target="_blank" rel="noopener noreferrer"
+                 class="btn btn-sm btn-outline-dark">
+                <i class="bi bi-github me-1"></i>GitHub
+              </a>
+            }
+            @if (cv.portfolioUrl) {
+              <a [href]="cv.portfolioUrl" target="_blank" rel="noopener noreferrer"
+                 class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-globe me-1"></i>Portfolio
+              </a>
+            }
+          </div>
+        </div>
+
+        <div class="mt-2 text-muted small">
+          <i class="bi bi-clock-history me-1"></i>
+          Extracted: {{ cv.extractedAt | appDate }}
+        </div>
+
+        @if (cv.missingFields.length > 0) {
+          <div class="mt-2">
+            <span class="text-muted small me-2">Missing fields:</span>
+            @for (field of cv.missingFields; track field) {
+              <span class="badge bg-light text-secondary border me-1">{{ field }}</span>
+            }
+          </div>
+        }
+        @if (cv.lowConfidenceFields.length > 0) {
+          <div class="mt-1">
+            <span class="text-muted small me-2">Low confidence:</span>
+            @for (field of cv.lowConfidenceFields; track field) {
+              <span class="badge bg-warning text-dark me-1">{{ field }}</span>
+            }
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- ── Summary ──────────────────────────────────────────────────────── -->
+    @if (cv.summary) {
+      <div class="card mb-4">
+        <div class="card-header fw-semibold">
+          <i class="bi bi-person-lines-fill me-2"></i>Summary
+        </div>
+        <div class="card-body">
+          <p class="mb-0">{{ cv.summary }}</p>
+        </div>
+      </div>
+    }
+
+    <!-- ── Work Experience ──────────────────────────────────────────────── -->
+    @if (cv.workExperiences.length > 0) {
+      <div class="card mb-4">
+        <div class="card-header fw-semibold">
+          <i class="bi bi-briefcase me-2"></i>Work Experience
+        </div>
+        <div class="card-body p-0">
+          <ul class="list-group list-group-flush">
+            @for (exp of cv.workExperiences; track exp.id) {
+              <li class="list-group-item">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-1">
+                  <div>
+                    <span class="fw-bold">{{ exp.company }}</span>
+                    <span class="text-muted"> — {{ exp.title }}</span>
+                  </div>
+                  <div class="d-flex flex-wrap gap-2 align-items-center">
+                    @if (formatDateRange(exp)) {
+                      <span class="text-muted small">
+                        <i class="bi bi-calendar3 me-1"></i>{{ formatDateRange(exp) }}
+                      </span>
+                    }
+                    @if (exp.isCurrent) {
+                      <span class="badge bg-primary">Current</span>
+                    }
+                    @if (exp.isRemote) {
+                      <span class="badge bg-info text-white">Remote</span>
+                    }
+                  </div>
+                </div>
+                @if (exp.location) {
+                  <div class="text-muted small mb-2">
+                    <i class="bi bi-geo-alt me-1"></i>{{ exp.location }}
+                  </div>
+                }
+                @if (exp.responsibilities.length > 0) {
+                  <div class="mb-2">
+                    <div class="small fw-semibold text-muted mb-1">Responsibilities</div>
+                    <ul class="mb-0 ps-3">
+                      @for (item of exp.responsibilities; track $index) {
+                        <li class="small">{{ item }}</li>
+                      }
+                    </ul>
+                  </div>
+                }
+                @if (exp.achievements.length > 0) {
+                  <div class="mb-2">
+                    <div class="small fw-semibold text-muted mb-1">Achievements</div>
+                    <ul class="mb-0 ps-3">
+                      @for (item of exp.achievements; track $index) {
+                        <li class="small">{{ item }}</li>
+                      }
+                    </ul>
+                  </div>
+                }
+                @if (exp.technologies.length > 0) {
+                  <div class="d-flex flex-wrap gap-1 mt-2">
+                    @for (tech of exp.technologies; track tech) {
+                      <span class="badge bg-light text-dark border">{{ tech }}</span>
+                    }
+                  </div>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    <!-- ── Education ────────────────────────────────────────────────────── -->
+    @if (cv.educations.length > 0) {
+      <div class="card mb-4">
+        <div class="card-header fw-semibold">
+          <i class="bi bi-mortarboard me-2"></i>Education
+        </div>
+        <div class="card-body p-0">
+          <ul class="list-group list-group-flush">
+            @for (edu of cv.educations; track edu.id) {
+              <li class="list-group-item">
+                <div class="fw-bold">{{ edu.institution }}</div>
+                <div class="text-muted">
+                  {{ edu.degree }}
+                  @if (edu.fieldOfStudy) { — {{ edu.fieldOfStudy }} }
+                </div>
+                <div class="d-flex flex-wrap gap-3 mt-1 small text-muted">
+                  @if (edu.startYear || edu.endYear) {
+                    <span>
+                      <i class="bi bi-calendar3 me-1"></i>
+                      {{ edu.startYear ?? '?' }} – {{ edu.endYear ?? 'Present' }}
+                    </span>
+                  }
+                  @if (edu.gpa !== null) {
+                    <span><i class="bi bi-star me-1"></i>GPA: {{ edu.gpa }}</span>
+                  }
+                  @if (edu.honors) {
+                    <span><i class="bi bi-award me-1"></i>{{ edu.honors }}</span>
+                  }
+                </div>
+              </li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    <!-- ── Skills ───────────────────────────────────────────────────────── -->
+    @if (cv.technicalSkills.length > 0 || cv.toolsAndFrameworks.length > 0 || cv.softSkills.length > 0) {
+      <div class="card mb-4">
+        <div class="card-header fw-semibold">
+          <i class="bi bi-tools me-2"></i>Skills
+        </div>
+        <div class="card-body">
+          @if (cv.technicalSkills.length > 0) {
+            <div class="mb-3">
+              <div class="small fw-semibold text-muted mb-2">Technical Skills</div>
+              <div class="d-flex flex-wrap gap-1">
+                @for (skill of cv.technicalSkills; track skill) {
+                  <span class="badge bg-primary">{{ skill }}</span>
+                }
+              </div>
+            </div>
+          }
+          @if (cv.toolsAndFrameworks.length > 0) {
+            <div class="mb-3">
+              <div class="small fw-semibold text-muted mb-2">Tools &amp; Frameworks</div>
+              <div class="d-flex flex-wrap gap-1">
+                @for (tool of cv.toolsAndFrameworks; track tool) {
+                  <span class="badge bg-info text-white">{{ tool }}</span>
+                }
+              </div>
+            </div>
+          }
+          @if (cv.softSkills.length > 0) {
+            <div>
+              <div class="small fw-semibold text-muted mb-2">Soft Skills</div>
+              <div class="d-flex flex-wrap gap-1">
+                @for (skill of cv.softSkills; track skill) {
+                  <span class="badge bg-secondary">{{ skill }}</span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- ── Languages ─────────────────────────────────────────────────────── -->
+    @if (cv.languages.length > 0) {
+      <div class="card mb-4">
+        <div class="card-header fw-semibold">
+          <i class="bi bi-translate me-2"></i>Languages
+        </div>
+        <div class="card-body">
+          <div class="d-flex flex-wrap gap-2">
+            @for (lang of cv.languages; track lang.id) {
+              <span class="badge bg-light text-dark border fs-6 px-3 py-2">
+                {{ lang.language }}
+                <span class="text-muted ms-1 fw-normal small">{{ lang.proficiency }}</span>
+              </span>
+            }
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ── Certifications ─────────────────────────────────────────────────── -->
+    @if (cv.certifications.length > 0) {
+      <div class="card mb-4">
+        <div class="card-header fw-semibold">
+          <i class="bi bi-patch-check me-2"></i>Certifications
+        </div>
+        <div class="card-body p-0">
+          <ul class="list-group list-group-flush">
+            @for (cert of cv.certifications; track cert.id) {
+              <li class="list-group-item">
+                <div class="fw-semibold">{{ cert.name }}</div>
+                @if (cert.issuer) {
+                  <div class="text-muted small"><i class="bi bi-building me-1"></i>{{ cert.issuer }}</div>
+                }
+                <div class="d-flex flex-wrap gap-3 mt-1 small text-muted">
+                  @if (cert.issuedDate) {
+                    <span><i class="bi bi-calendar-check me-1"></i>Issued: {{ cert.issuedDate | appDate }}</span>
+                  }
+                  @if (cert.expiryDate) {
+                    <span><i class="bi bi-calendar-x me-1"></i>Expires: {{ cert.expiryDate | appDate }}</span>
+                  }
+                  @if (cert.credentialId) {
+                    <span><i class="bi bi-hash me-1"></i>{{ cert.credentialId }}</span>
+                  }
+                </div>
+              </li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    <!-- ── Projects ──────────────────────────────────────────────────────── -->
+    @if (cv.projects.length > 0) {
+      <div class="card mb-4">
+        <div class="card-header fw-semibold">
+          <i class="bi bi-kanban me-2"></i>Projects
+        </div>
+        <div class="card-body p-0">
+          <ul class="list-group list-group-flush">
+            @for (proj of cv.projects; track proj.name) {
+              <li class="list-group-item">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                  <span class="fw-semibold">{{ proj.name }}</span>
+                  @if (proj.url) {
+                    <a [href]="proj.url" target="_blank" rel="noopener noreferrer"
+                       class="btn btn-sm btn-outline-secondary py-0">
+                      <i class="bi bi-box-arrow-up-right me-1"></i>Link
+                    </a>
+                  }
+                </div>
+                @if (proj.description) {
+                  <p class="mb-2 text-muted small">{{ proj.description }}</p>
+                }
+                @if (proj.technologies.length > 0) {
+                  <div class="d-flex flex-wrap gap-1">
+                    @for (tech of proj.technologies; track tech) {
+                      <span class="badge bg-light text-dark border">{{ tech }}</span>
+                    }
+                  </div>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    <!-- ── Publications ──────────────────────────────────────────────────── -->
+    @if (cv.publications.length > 0) {
+      <div class="card mb-4">
+        <div class="card-header fw-semibold">
+          <i class="bi bi-journal-richtext me-2"></i>Publications
+        </div>
+        <div class="card-body p-0">
+          <ul class="list-group list-group-flush">
+            @for (pub of cv.publications; track pub.title) {
+              <li class="list-group-item">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                  <span class="fw-semibold">{{ pub.title }}</span>
+                  @if (pub.url) {
+                    <a [href]="pub.url" target="_blank" rel="noopener noreferrer"
+                       class="btn btn-sm btn-outline-secondary py-0">
+                      <i class="bi bi-box-arrow-up-right me-1"></i>Link
+                    </a>
+                  }
+                </div>
+                <div class="d-flex flex-wrap gap-3 small text-muted mt-1">
+                  @if (pub.journal) {
+                    <span><i class="bi bi-journal me-1"></i>{{ pub.journal }}</span>
+                  }
+                  @if (pub.year) {
+                    <span><i class="bi bi-calendar3 me-1"></i>{{ pub.year }}</span>
+                  }
+                </div>
+              </li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+  }
+</app-page-layout>

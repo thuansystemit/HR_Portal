@@ -1,0 +1,68 @@
+.dt-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+// Sort button — sits inline with the header label
+.dt-th-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+}
+
+.dt-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--bs-secondary-color);
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s ease;
+
+  &:hover {
+    color: var(--bs-primary);
+  }
+}
+
+// Only disable clip when the table has dropdown-type filter columns
+// (so their menus aren't cut off). Tables without dropdowns keep default
+// overflow-x: auto so wide columns scroll instead of expanding the page.
+.dt-wrapper .table-responsive.dt-dropdown-overflow {
+  overflow: visible;
+}
+
+// Filter row — tighter padding
+.dt-filter-row th {
+  padding: 0.25rem 0.5rem;
+  background-color: var(--bs-tertiary-bg, #f8f9fa);
+}
+
+// Dropdown inside filter row — tighter height to match text input
+.dt-filter-dropdown .dd__trigger {
+  padding-top:    0.2rem;
+  padding-bottom: 0.2rem;
+  font-size:      0.875rem;
+}
+
+// Clickable rows
+.dt-row {
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+// Loading / empty state cell
+.dt-state-cell {
+  padding: 2.5rem 1rem;
+}
+
+// Footer: count on the left, pagination on the right
+.dt-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0;
+}

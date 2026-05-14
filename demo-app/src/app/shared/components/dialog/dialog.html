@@ -1,0 +1,44 @@
+@if (visible()) {
+  <div class="dlg-backdrop" (click)="cancel()"></div>
+
+  <div class="modal dlg-modal" role="dialog" aria-modal="true" [attr.aria-labelledby]="'dlg-title'">
+    <div class="modal-dialog modal-dialog-centered" [ngClass]="sizeClass()">
+      <div class="modal-content">
+
+        <div class="modal-header">
+          <h5 class="modal-title d-flex align-items-center gap-2" id="dlg-title">
+            <i class="bi fs-5" [ngClass]="iconClass()"></i>
+            {{ config().title }}
+          </h5>
+          <button type="button" class="btn-close" (click)="cancel()" aria-label="Close"></button>
+        </div>
+
+        @if (config().bodyComponent) {
+          <div class="modal-body">
+            <ng-container
+              [ngComponentOutlet]="config().bodyComponent!"
+              [ngComponentOutletInputs]="config().bodyInputs ?? {}"
+              [ngComponentOutletInjector]="injector"
+            />
+          </div>
+        } @else if (config().message) {
+          <div class="modal-body">
+            <p class="mb-0">{{ config().message }}</p>
+          </div>
+        }
+
+        <div class="modal-footer gap-2">
+          @if (showCancel) {
+            <app-btn variant="secondary" (btnClick)="cancel()">
+              {{ config().cancelLabel ?? 'Cancel' }}
+            </app-btn>
+          }
+          <app-btn [variant]="confirmVariant()" (btnClick)="confirm()">
+            {{ config().confirmLabel ?? 'Confirm' }}
+          </app-btn>
+        </div>
+
+      </div>
+    </div>
+  </div>
+}

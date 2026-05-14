@@ -1,0 +1,26 @@
+<table class="perm-cell-table">
+  <thead>
+    <tr>
+      <th></th>
+      @for (col of cols; track col.key) {
+        <th>{{ col.label }}</th>
+      }
+    </tr>
+  </thead>
+  <tbody>
+    @for (row of permissions(); track row.roleId) {
+      <tr>
+        <td class="perm-cell-role">{{ row.roleName }}</td>
+        @for (col of cols; track col.key) {
+          <td class="text-center">
+            <i class="bi"
+               [ngClass]="$any(row)[col.key]
+                 ? 'bi-check-circle-fill text-success'
+                 : 'bi-dash text-secondary'">
+            </i>
+          </td>
+        }
+      </tr>
+    }
+  </tbody>
+</table>

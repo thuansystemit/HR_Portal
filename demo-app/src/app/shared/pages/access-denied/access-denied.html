@@ -1,0 +1,23 @@
+<div class="access-denied d-flex flex-column align-items-center justify-content-center text-center px-3">
+
+  <div class="access-denied-icon mb-4">
+    <i class="bi bi-shield-exclamation"></i>
+  </div>
+
+  <h1 class="fw-bold mb-2">Access Denied</h1>
+  <p class="text-muted mb-1">
+    You don't have permission to view this page.
+  </p>
+  <p class="text-muted small mb-4">
+    Your current role is
+    <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">
+      {{ auth.user()?.roleName }}
+    </span>
+    — contact your administrator if you need access.
+  </p>
+
+  <a routerLink="/dashboard" class="btn btn-primary px-4">
+    <i class="bi bi-house me-2"></i>Back to Dashboard
+  </a>
+
+</div>

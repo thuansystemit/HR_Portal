@@ -1,0 +1,12 @@
+.dash-card {
+  transition: box-shadow 0.15s, transform 0.15s;
+
+  &:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+  }
+}
+
+.dash-card-icon {
+  flex-shrink: 0;
+}

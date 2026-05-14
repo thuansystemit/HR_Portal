@@ -1,0 +1,66 @@
+@if (store.error()) {
+  <div class="alert alert-danger py-2 mb-3">{{ store.error() }}</div>
+}
+
+@if (store.loading()) {
+  <div class="d-flex justify-content-center py-3">
+    <span class="spinner-border text-primary"></span>
+  </div>
+} @else {
+  <div class="row g-3">
+
+    <!-- Name -->
+    <div class="col-12 col-sm-6">
+      <label class="form-label fw-semibold" for="rfb-name">Role Name</label>
+      <input
+        id="rfb-name"
+        class="form-control"
+        [class.is-invalid]="isInvalid('name')"
+        [formControl]="$any(form.get('name'))"
+        placeholder="e.g. Auditor"
+      />
+      <div class="invalid-feedback">Name is required (min 2 characters).</div>
+    </div>
+
+    <!-- Description -->
+    <div class="col-12 col-sm-6">
+      <label class="form-label fw-semibold" for="rfb-desc">Description</label>
+      <input
+        id="rfb-desc"
+        class="form-control"
+        [formControl]="$any(form.get('description'))"
+        placeholder="Brief description of this role"
+      />
+    </div>
+
+    <!-- Permissions -->
+    <div class="col-12">
+      <label class="form-label fw-semibold">Permissions</label>
+      <div class="rfb-permissions" [formGroup]="$any(form.get('permissions'))">
+        @for (group of permissionGroups; track group.label) {
+          <div class="rfb-perm-group">
+            <div class="rfb-perm-group-label">{{ group.label }}</div>
+            <div class="row g-2">
+              @for (key of group.keys; track key) {
+                <div class="col-12 col-sm-6">
+                  <div class="form-check">
+                    <input
+                      type="checkbox"
+                      class="form-check-input"
+                      [id]="'perm-' + key"
+                      [formControlName]="key"
+                    />
+                    <label class="form-check-label" [for]="'perm-' + key">
+                      {{ permissionLabels[key] }}
+                    </label>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+
+  </div>
+}

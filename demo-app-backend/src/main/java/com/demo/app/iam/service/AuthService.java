@@ -1,0 +1,234 @@
+package com.demo.app.iam.service;
+
+import com.demo.app.iam.dto.AuthResponse;
+import com.demo.app.iam.dto.ChangePasswordRequest;
+import com.demo.app.iam.dto.LoginRequest;
+import com.demo.app.iam.dto.UserInfo;
+import com.demo.app.iam.entity.Credential;
+import com.demo.app.iam.entity.RefreshToken;
+import com.demo.app.iam.repository.*;
+import com.demo.app.platform.exception.ForbiddenException;
+import com.demo.app.platform.exception.ResourceNotFoundException;
+import com.demo.app.platform.exception.WrongPasswordException;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.Set;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class AuthService {
+
+    private final UserRepository userRepository;
+    private final CredentialRepository credentialRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final UserRoleRepository userRoleRepository;
+    private final RoleRepository roleRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
+    private final PermissionCacheService permissionCacheService;
+
+    @Value("${app.cookie.secure:false}")
+    private boolean cookieSecure;
+
+    @Value("${app.jwt.access-expiry-seconds:900}")
+    private int accessExpiry;
+
+    @Value("${app.jwt.refresh-expiry-seconds:604800}")
+    private int refreshExpiry;
+
+    @Transactional
+    public AuthResponse login(LoginRequest request, HttpServletResponse response,
+                              String ipAddress, String userAgent) {
+        var user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email())
+                .orElseThrow(() -> new ForbiddenException("Invalid credentials"));
+
+        if (!"active".equals(user.getStatus())) {
+            throw new ForbiddenException("Account is inactive");
+        }
+
+        var credential = credentialRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new ForbiddenException("Invalid credentials"));
+
+        if (credential.getLockedUntil() != null && credential.getLockedUntil().isAfter(Instant.now())) {
+            throw new ForbiddenException("Account is temporarily locked");
+        }
+
+        if (!passwordEncoder.matches(request.password(), credential.getPasswordHash())) {
+            handleFailedLogin(credential);
+            throw new ForbiddenException("Invalid credentials");
+        }
+
+        credential.setFailedAttempts(0);
+        credential.setLockedUntil(null);
+        credentialRepository.save(credential);
+
+        var permSet = permissionCacheService.loadPermissions(user.getId());
+        var accessToken = jwtService.generateAccessToken(user.getId(), permSet.roleId(), permSet.codes());
+        var rawRefresh = UUID.randomUUID().toString();
+
+        refreshTokenRepository.save(RefreshToken.builder()
+                .userId(user.getId())
+                .tokenHash(sha256(rawRefresh))
+                .expiresAt(Instant.now().plusSeconds(refreshExpiry))
+                .ipAddress(ipAddress)
+                .userAgent(userAgent)
+                .build());
+
+        setAccessCookie(response, accessToken);
+        setRefreshCookie(response, rawRefresh);
+        return new AuthResponse(buildUserInfo(user.getId(), permSet));
+    }
+
+    @Transactional
+    public AuthResponse refresh(HttpServletRequest request, HttpServletResponse response) {
+        var rawToken = extractCookie(request, "refresh-token");
+        if (rawToken == null) {
+            throw new ForbiddenException("No refresh token provided");
+        }
+
+        var stored = refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(sha256(rawToken))
+                .orElseThrow(() -> new ForbiddenException("Invalid refresh token"));
+
+        if (stored.getExpiresAt().isBefore(Instant.now())) {
+            stored.setRevokedAt(Instant.now());
+            refreshTokenRepository.save(stored);
+            throw new ForbiddenException("Refresh token expired");
+        }
+
+        stored.setRevokedAt(Instant.now());
+        refreshTokenRepository.save(stored);
+
+        var user = userRepository.findByIdAndDeletedAtIsNull(stored.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("User", stored.getUserId()));
+
+        var permSet = permissionCacheService.loadPermissions(user.getId());
+        var newAccess = jwtService.generateAccessToken(user.getId(), permSet.roleId(), permSet.codes());
+        var newRaw = UUID.randomUUID().toString();
+
+        refreshTokenRepository.save(RefreshToken.builder()
+                .userId(user.getId())
+                .tokenHash(sha256(newRaw))
+                .expiresAt(Instant.now().plusSeconds(refreshExpiry))
+                .build());
+
+        setAccessCookie(response, newAccess);
+        setRefreshCookie(response, newRaw);
+        return new AuthResponse(buildUserInfo(user.getId(), permSet));
+    }
+
+    @Transactional
+    public void logout(HttpServletRequest request, HttpServletResponse response) {
+        var rawToken = extractCookie(request, "refresh-token");
+        if (rawToken != null) {
+            refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(sha256(rawToken))
+                    .ifPresent(t -> {
+                        t.setRevokedAt(Instant.now());
+                        refreshTokenRepository.save(t);
+                    });
+        }
+        clearCookie(response, "access-token", "/api");
+        clearCookie(response, "refresh-token", "/api/v1/auth");
+    }
+
+    @Transactional(readOnly = true)
+    public UserInfo getMe(UUID userId) {
+        userRepository.findByIdAndDeletedAtIsNull(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+        var permSet = permissionCacheService.loadPermissions(userId);
+        return buildUserInfo(userId, permSet);
+    }
+
+    @Transactional
+    public void changePassword(UUID userId, ChangePasswordRequest request) {
+        var credential = credentialRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Credential not found"));
+
+        if (!passwordEncoder.matches(request.currentPassword(), credential.getPasswordHash())) {
+            throw new WrongPasswordException();
+        }
+        credential.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        credentialRepository.save(credential);
+        permissionCacheService.evict(userId);
+    }
+
+    private void handleFailedLogin(Credential credential) {
+        credential.setFailedAttempts(credential.getFailedAttempts() + 1);
+        if (credential.getFailedAttempts() >= 5) {
+            credential.setLockedUntil(Instant.now().plusSeconds(900));
+        }
+        credentialRepository.save(credential);
+    }
+
+    private UserInfo buildUserInfo(UUID userId, PermissionCacheService.PermissionSet permSet) {
+        var user = userRepository.findByIdAndDeletedAtIsNull(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+        var roleName = permSet.roleId() != null
+                ? roleRepository.findById(permSet.roleId()).map(r -> r.getName()).orElse(null)
+                : null;
+        return new UserInfo(user.getId(), user.getFullName(), user.getEmail(),
+                permSet.roleId(), roleName, permSet.codes());
+    }
+
+    private void setAccessCookie(HttpServletResponse response, String token) {
+        var c = new Cookie("access-token", token);
+        c.setHttpOnly(true);
+        c.setSecure(cookieSecure);
+        c.setPath("/api");
+        c.setMaxAge(accessExpiry);
+        c.setAttribute("SameSite", "Strict");
+        response.addCookie(c);
+    }
+
+    private void setRefreshCookie(HttpServletResponse response, String token) {
+        var c = new Cookie("refresh-token", token);
+        c.setHttpOnly(true);
+        c.setSecure(cookieSecure);
+        c.setPath("/api/v1/auth");
+        c.setMaxAge(refreshExpiry);
+        c.setAttribute("SameSite", "Strict");
+        response.addCookie(c);
+    }
+
+    private void clearCookie(HttpServletResponse response, String name, String path) {
+        var c = new Cookie(name, "");
+        c.setHttpOnly(true);
+        c.setSecure(cookieSecure);
+        c.setPath(path);
+        c.setMaxAge(0);
+        response.addCookie(c);
+    }
+
+    private String extractCookie(HttpServletRequest request, String name) {
+        if (request.getCookies() == null) return null;
+        return Arrays.stream(request.getCookies())
+                .filter(c -> name.equals(c.getName()))
+                .map(Cookie::getValue)
+                .findFirst().orElse(null);
+    }
+
+    String sha256(String input) {
+        try {
+            var digest = MessageDigest.getInstance("SHA-256");
+            var hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+            var sb = new StringBuilder();
+            for (byte b : hash) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            throw new RuntimeException("SHA-256 unavailable", e);
+        }
+    }
+}

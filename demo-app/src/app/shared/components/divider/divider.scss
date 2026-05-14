@@ -1,0 +1,24 @@
+.dvd {
+  display: flex;
+  align-items: center;
+
+  &.dvd-sm { margin-block: 0.5rem; }
+  &.dvd-md { margin-block: 1rem; }
+  &.dvd-lg { margin-block: 1.75rem; }
+}
+
+.dvd-line {
+  flex: 1;
+  border-top: var(--dvd-thickness, 1px) solid var(--bs-border-color);
+
+  .dvd-dashed & { border-top-style: dashed; }
+  .dvd-dotted & { border-top-style: dotted; }
+}
+
+.dvd-label {
+  padding-inline: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--bs-secondary-color);
+  white-space: nowrap;
+}

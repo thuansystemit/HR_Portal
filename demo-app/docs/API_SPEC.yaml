@@ -1,0 +1,1739 @@
+openapi: "3.1.0"
+
+info:
+  title: Demo App API
+  version: 1.0.0
+  description: |
+    REST API for the Angular 21 Enterprise Demo App.
+
+    ## Authentication
+    All protected endpoints use an HttpOnly JWT cookie (`access-token`, RS256, 15-min TTL)
+    set by `POST /auth/login` and rotated by `POST /auth/refresh`.
+    The browser sends it automatically when Angular `HttpClient` is configured with
+    `withCredentials: true`. No `Authorization` header is used.
+
+    ## CSRF
+    CSRF tokens are **disabled**. Protection is provided by `SameSite=Strict` on both
+    auth cookies combined with the strict CORS origin allowlist.
+
+    ## Pagination
+    List endpoints accept `page` (0-based) and `pageSize` query parameters.
+    The total item count is returned in the `X-Total-Count` response header.
+    Response bodies for list endpoints are plain JSON arrays.
+
+    ## Errors
+    All error responses share the same shape:
+    ```json
+    { "code": "ERROR_CODE", "message": "human-readable description",
+      "fields": [{ "field": "email", "message": "must be a valid email" }] }
+    ```
+
+servers:
+  - url: https://api.company.com/api/v1
+    description: Production
+  - url: https://staging.company.com/api/v1
+    description: Staging
+  - url: http://localhost:8080/api/v1
+    description: Local development
+
+security:
+  - cookieAuth: []
+
+tags:
+  - name: Auth
+    description: Authentication — login, logout, token refresh, password change
+  - name: Users
+    description: User management (CRUD)
+  - name: Roles
+    description: Role and permission management
+  - name: Categories
+    description: Document category management
+  - name: Documents
+    description: Document upload, retrieval, and deletion
+  - name: Reports
+    description: Aggregated analytics charts
+  - name: Settings
+    description: Per-user application settings
+  - name: Profile
+    description: Authenticated user's own profile
+  - name: Audit
+    description: Immutable audit event log (Admin only)
+  - name: Health
+    description: Spring Boot Actuator health probes
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+paths:
+
+  # ── Auth ──────────────────────────────────────────────────────────────────
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in with email and password
+      operationId: login
+      security: []
+      description: |
+        Validates credentials and sets two HttpOnly cookies:
+        - `access-token` (JWT RS256, 15 min, SameSite=Strict)
+        - `refresh-token` (opaque 256-bit, 7 days, SameSite=Strict, Path=/auth/refresh)
+
+        A non-HttpOnly `XSRF-TOKEN` cookie is **not** issued (CSRF is disabled).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful. Cookies set in `Set-Cookie` headers.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Log out and revoke the refresh token
+      operationId: logout
+      description: Clears `access-token` and `refresh-token` cookies and revokes the refresh token in the database.
+      responses:
+        '204':
+          description: Logged out successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Silently rotate auth cookies
+      operationId: refreshToken
+      security: []
+      description: |
+        Uses the HttpOnly `refresh-token` cookie (scoped to `Path=/auth/refresh`).
+        Rotates both cookies and revokes the old refresh token.
+        Called automatically by the Angular HTTP interceptor on receiving a 401.
+      responses:
+        '200':
+          description: Cookies rotated. New cookies set in `Set-Cookie` headers.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/password:
+    post:
+      tags: [Auth]
+      summary: Change the authenticated user's password
+      operationId: changePassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: Password changed successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          description: Validation error or wrong current password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                wrongPassword:
+                  value:
+                    code: WRONG_PASSWORD
+                    message: Current password is incorrect
+                tooShort:
+                  value:
+                    code: VALIDATION_ERROR
+                    message: Validation failed
+                    fields:
+                      - field: newPassword
+                        message: must be at least 6 characters
+
+  # ── Users ─────────────────────────────────────────────────────────────────
+
+  /users:
+    get:
+      tags: [Users]
+      summary: List users
+      operationId: listUsers
+      x-permission: usersView
+      parameters:
+        - name: q
+          in: query
+          description: Search term matched against name and email
+          schema:
+            type: string
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - $ref: '#/components/parameters/SortParam'
+      responses:
+        '200':
+          description: Paginated user list
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/XTotalCount'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Users]
+      summary: Create a user
+      operationId: createUser
+      x-permission: usersCreate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreateRequest'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: CONFLICT
+                message: A user with this email already exists
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+
+    patch:
+      tags: [Users]
+      summary: Update a user
+      operationId: updateUser
+      x-permission: usersEdit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+    delete:
+      tags: [Users]
+      summary: Delete a user
+      operationId: deleteUser
+      x-permission: usersDelete
+      responses:
+        '204':
+          description: User deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Cannot delete your own account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: CONFLICT
+                message: You cannot delete your own account
+
+  # ── Roles ─────────────────────────────────────────────────────────────────
+
+  /roles:
+    get:
+      tags: [Roles]
+      summary: List roles
+      operationId: listRoles
+      x-permission: rolesView
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200':
+          description: Paginated role list
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/XTotalCount'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Roles]
+      summary: Create a role
+      operationId: createRole
+      x-permission: rolesEdit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+      responses:
+        '201':
+          description: Role created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Role name already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: CONFLICT
+                message: A role with this name already exists
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /roles/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+
+    patch:
+      tags: [Roles]
+      summary: Update a role
+      operationId: updateRole
+      x-permission: rolesEdit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+      responses:
+        '200':
+          description: Updated role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Cannot modify a built-in role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: BUILT_IN_ROLE
+                message: Built-in roles cannot be modified
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+    delete:
+      tags: [Roles]
+      summary: Delete a role
+      operationId: deleteRole
+      x-permission: rolesEdit
+      responses:
+        '204':
+          description: Role deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Built-in role or role still assigned to users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                builtIn:
+                  value:
+                    code: BUILT_IN_ROLE
+                    message: Built-in roles cannot be deleted
+                hasUsers:
+                  value:
+                    code: CONFLICT
+                    message: Cannot delete a role that is assigned to users
+
+  # ── Categories ────────────────────────────────────────────────────────────
+
+  /categories:
+    get:
+      tags: [Categories]
+      summary: List document categories
+      operationId: listCategories
+      description: Returns only categories where the caller's role has `canView = true`.
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200':
+          description: Paginated category list
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/XTotalCount'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentCategory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Categories]
+      summary: Create a category
+      operationId: createCategory
+      x-permission: rolesEdit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+      responses:
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentCategory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Slug already in use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: CONFLICT
+                message: A category with this slug already exists
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /categories/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+
+    patch:
+      tags: [Categories]
+      summary: Update a category
+      operationId: updateCategory
+      x-permission: rolesEdit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+      responses:
+        '200':
+          description: Updated category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentCategory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+    delete:
+      tags: [Categories]
+      summary: Delete a category
+      operationId: deleteCategory
+      x-permission: rolesEdit
+      responses:
+        '204':
+          description: Category deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Category still contains documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: CONFLICT
+                message: Cannot delete a category that contains documents
+
+  /categories/{id}/visibility:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+
+    put:
+      tags: [Categories]
+      summary: Set per-role visibility for a category
+      operationId: setCategoryVisibility
+      x-permission: rolesEdit
+      description: Replaces the entire visibility matrix for the category. Omitted roles default to all-false.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryVisibilityRequest'
+      responses:
+        '200':
+          description: Updated category with new visibility
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentCategory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # ── Documents ─────────────────────────────────────────────────────────────
+
+  /documents:
+    get:
+      tags: [Documents]
+      summary: List documents in a category
+      operationId: listDocuments
+      description: Returns ready documents the caller's role has `canView = true` for in the given category.
+      parameters:
+        - name: categoryId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Filter by category
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200':
+          description: Paginated document list
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/XTotalCount'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Document'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Caller's role has `canView = false` for this category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /documents/presign:
+    post:
+      tags: [Documents]
+      summary: Request a presigned S3 upload URL
+      operationId: presignUpload
+      description: |
+        Creates a `pending` document record and returns a presigned S3 `PUT` URL.
+        The browser uploads bytes directly to S3, then calls `POST /documents/{id}/commit`.
+        The presigned URL expires in 5 minutes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresignRequest'
+      responses:
+        '200':
+          description: Presigned upload URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresignResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Caller's role has `canUpload = false` for this category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /documents/{id}/commit:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+
+    post:
+      tags: [Documents]
+      summary: Confirm upload completed
+      operationId: commitUpload
+      description: |
+        Verifies the object exists in S3 (HEAD check) and transitions status from
+        `pending` to `ready`. Triggers report cache invalidation and audit logging.
+      responses:
+        '200':
+          description: Document is now ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Already committed or upload URL expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                alreadyCommitted:
+                  value:
+                    code: CONFLICT
+                    message: Document has already been committed
+                expired:
+                  value:
+                    code: UPLOAD_EXPIRED
+                    message: The upload window has expired. Please request a new presigned URL.
+
+  /documents/{id}/url:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+
+    get:
+      tags: [Documents]
+      summary: Get a presigned download URL
+      operationId: getDocumentUrl
+      description: Returns a presigned S3 GET URL valid for 5 minutes. The browser fetches the file directly from S3.
+      responses:
+        '200':
+          description: Presigned download URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadUrlResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Caller's role has `canView = false` for this document's category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /documents/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdParam'
+
+    delete:
+      tags: [Documents]
+      summary: Delete a document
+      operationId: deleteDocument
+      description: Marks the document as deleted and schedules the S3 object for removal.
+      responses:
+        '204':
+          description: Document deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Caller's role has `canDelete = false` for this document's category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Reports ───────────────────────────────────────────────────────────────
+
+  /reports/upload-trend:
+    get:
+      tags: [Reports]
+      summary: Monthly upload trend for the last 12 months
+      operationId: getUploadTrend
+      x-permission: rolesView
+      description: Returns one series per category. Results are cached in Redis (TTL 5 min).
+      responses:
+        '200':
+          description: Upload trend data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadTrendResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /reports/by-category:
+    get:
+      tags: [Reports]
+      summary: Current document count per category
+      operationId: getDocsByCategory
+      x-permission: rolesView
+      responses:
+        '200':
+          description: Document counts by category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryCountResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /reports/role-distribution:
+    get:
+      tags: [Reports]
+      summary: User count per role
+      operationId: getRoleDistribution
+      x-permission: rolesView
+      responses:
+        '200':
+          description: Role distribution data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDistributionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /reports/storage-by-category:
+    get:
+      tags: [Reports]
+      summary: Total storage bytes per category
+      operationId: getStorageByCategory
+      x-permission: rolesView
+      description: Counts only documents with `status = ready`.
+      responses:
+        '200':
+          description: Storage usage by category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── Settings ──────────────────────────────────────────────────────────────
+
+  /settings/me:
+    get:
+      tags: [Settings]
+      summary: Get the authenticated user's settings
+      operationId: getMySettings
+      responses:
+        '200':
+          description: Current settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      tags: [Settings]
+      summary: Update the authenticated user's settings
+      operationId: updateMySettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppSettingsUpdate'
+      responses:
+        '200':
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /settings/me/reset:
+    post:
+      tags: [Settings]
+      summary: Reset settings to system defaults
+      operationId: resetMySettings
+      responses:
+        '200':
+          description: Settings reset to defaults
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── Profile ───────────────────────────────────────────────────────────────
+
+  /profile:
+    get:
+      tags: [Profile]
+      summary: Get the authenticated user's profile
+      operationId: getProfile
+      responses:
+        '200':
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      tags: [Profile]
+      summary: Update display name
+      operationId: updateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdateRequest'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # ── Audit ─────────────────────────────────────────────────────────────────
+
+  /audit:
+    get:
+      tags: [Audit]
+      summary: List audit events
+      operationId: listAuditEvents
+      x-permission: rolesEdit
+      description: Returns immutable audit log entries. Admin only. Partitioned table — queries are always scoped by date range for performance.
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: action
+          in: query
+          schema:
+            type: string
+          description: Filter by action code (e.g. `USER_CREATED`, `LOGIN_FAILED`)
+        - name: resourceType
+          in: query
+          schema:
+            type: string
+          description: Filter by resource type (e.g. `user`, `document`)
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of date range (inclusive). Defaults to 30 days ago.
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of date range (inclusive). Defaults to now.
+      responses:
+        '200':
+          description: Paginated audit events
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/XTotalCount'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditEvent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── Health (no /api/v1 prefix — Spring Actuator) ─────────────────────────
+
+  /actuator/health/liveness:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      operationId: livenessCheck
+      security: []
+      description: Returns UP if the application process is alive. Used by ECS task health check.
+      servers:
+        - url: http://localhost:8080
+          description: Internal (not exposed via Nginx to public)
+      responses:
+        '200':
+          description: Application is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /actuator/health/readiness:
+    get:
+      tags: [Health]
+      summary: Readiness probe
+      operationId: readinessCheck
+      security: []
+      description: Returns UP only when PostgreSQL, Redis, and S3 are all reachable. ECS removes the task from the load balancer if this returns 503.
+      servers:
+        - url: http://localhost:8080
+          description: Internal (not exposed via Nginx to public)
+      responses:
+        '200':
+          description: Application is ready to serve traffic
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: One or more dependencies unreachable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+# ---------------------------------------------------------------------------
+# Components
+# ---------------------------------------------------------------------------
+components:
+
+  # ── Security Schemes ──────────────────────────────────────────────────────
+
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: access-token
+      description: |
+        HttpOnly JWT cookie (RS256, 15-min TTL). Set by `POST /auth/login` and
+        rotated by `POST /auth/refresh`. Angular `HttpClient` sends it automatically
+        when configured with `withCredentials: true`. Never accessible to JavaScript.
+
+  # ── Headers ───────────────────────────────────────────────────────────────
+
+  headers:
+    XTotalCount:
+      description: Total number of items matching the query (before pagination)
+      schema:
+        type: integer
+        example: 42
+
+  # ── Parameters ────────────────────────────────────────────────────────────
+
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Resource UUID
+
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: Zero-based page number
+
+    PageSizeParam:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        enum: [5, 10, 25, 50]
+        default: 10
+      description: Number of items per page
+
+    SortParam:
+      name: sort
+      in: query
+      schema:
+        type: string
+        example: createdAt,desc
+      description: "Sort field and direction separated by comma. Example: `createdAt,desc`"
+
+  # ── Reusable Responses ────────────────────────────────────────────────────
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid authentication cookie
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: UNAUTHORIZED
+            message: Authentication required
+
+    Forbidden:
+      description: Authenticated but insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: FORBIDDEN
+            message: You do not have permission to perform this action
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: NOT_FOUND
+            message: The requested resource was not found
+
+    ValidationError:
+      description: Request body failed validation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: VALIDATION_ERROR
+            message: Validation failed
+            fields:
+              - field: email
+                message: must be a valid email address
+
+    RateLimited:
+      description: Too many requests
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying
+          schema:
+            type: integer
+            example: 60
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: RATE_LIMITED
+            message: Too many requests. Please wait before retrying.
+
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: INTERNAL_ERROR
+            message: An unexpected error occurred
+
+  # ── Schemas ───────────────────────────────────────────────────────────────
+
+  schemas:
+
+    # ── Enums ────────────────────────────────────────────────────────────────
+
+    UserStatus:
+      type: string
+      enum: [active, inactive, suspended]
+      description: Lifecycle status of a user account
+
+    DocumentStatus:
+      type: string
+      enum: [pending, ready, deleted]
+      description: |
+        - `pending`: upload presigned URL issued, S3 object not yet confirmed
+        - `ready`: upload committed, document accessible
+        - `deleted`: soft-deleted, S3 object scheduled for removal
+      readOnly: true
+
+    Theme:
+      type: string
+      enum: [light, dark, system]
+      description: UI colour theme preference. `system` resolves via `prefers-color-scheme`.
+
+    Language:
+      type: string
+      enum: [en, vi, fr, de, ja]
+
+    DateFormat:
+      type: string
+      enum: [MM/DD/YYYY, DD/MM/YYYY, YYYY-MM-DD]
+
+    PageSize:
+      type: integer
+      enum: [5, 10, 25, 50]
+
+    ErrorCode:
+      type: string
+      enum:
+        - VALIDATION_ERROR
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+        - CONFLICT
+        - BUILT_IN_ROLE
+        - WRONG_PASSWORD
+        - UPLOAD_EXPIRED
+        - RATE_LIMITED
+        - INTERNAL_ERROR
+
+    # ── Core Entities ────────────────────────────────────────────────────────
+
+    RolePermissions:
+      type: object
+      required:
+        - usersView
+        - usersCreate
+        - usersEdit
+        - usersDelete
+        - rolesView
+        - rolesEdit
+      properties:
+        usersView:
+          type: boolean
+        usersCreate:
+          type: boolean
+        usersEdit:
+          type: boolean
+        usersDelete:
+          type: boolean
+        rolesView:
+          type: boolean
+        rolesEdit:
+          type: boolean
+
+    User:
+      type: object
+      required: [id, email, displayName, status, roleId, roleName, permissions, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        roleId:
+          type: string
+          format: uuid
+        roleName:
+          type: string
+        permissions:
+          $ref: '#/components/schemas/RolePermissions'
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    UserCreateRequest:
+      type: object
+      required: [email, displayName, password, roleId]
+      properties:
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 100
+        password:
+          type: string
+          minLength: 6
+          format: password
+        roleId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/UserStatus'
+
+    UserUpdateRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 100
+        roleId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/UserStatus'
+
+    Role:
+      type: object
+      required: [id, name, description, isBuiltIn, permissions, userCount, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+        description:
+          type: string
+        isBuiltIn:
+          type: boolean
+          readOnly: true
+          description: Built-in roles (Administrator, Manager, Viewer) cannot be modified or deleted
+        permissions:
+          $ref: '#/components/schemas/RolePermissions'
+        userCount:
+          type: integer
+          readOnly: true
+          description: Number of users currently assigned to this role
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    RoleRequest:
+      type: object
+      required: [name, permissions]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 50
+        description:
+          type: string
+          maxLength: 500
+        permissions:
+          $ref: '#/components/schemas/RolePermissions'
+
+    CategoryVisibilityItem:
+      type: object
+      required: [roleId, roleName, canView, canUpload, canDelete]
+      properties:
+        roleId:
+          type: string
+          format: uuid
+        roleName:
+          type: string
+        canView:
+          type: boolean
+        canUpload:
+          type: boolean
+        canDelete:
+          type: boolean
+
+    DocumentCategory:
+      type: object
+      required: [id, name, slug, sortOrder, documentCount, visibility, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+        slug:
+          type: string
+        sortOrder:
+          type: integer
+        documentCount:
+          type: integer
+          readOnly: true
+        visibility:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryVisibilityItem'
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    CategoryRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        slug:
+          type: string
+          pattern: '^[a-z0-9-]+$'
+          description: URL-safe identifier. Auto-generated from name if omitted.
+        sortOrder:
+          type: integer
+          minimum: 0
+          default: 0
+
+    CategoryVisibilityRequest:
+      type: object
+      required: [visibility]
+      properties:
+        visibility:
+          type: array
+          items:
+            type: object
+            required: [roleId, canView, canUpload, canDelete]
+            properties:
+              roleId:
+                type: string
+                format: uuid
+              canView:
+                type: boolean
+              canUpload:
+                type: boolean
+              canDelete:
+                type: boolean
+
+    Document:
+      type: object
+      required: [id, categoryId, categoryName, ownerId, ownerName, filename, mimeType, sizeBytes, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        categoryId:
+          type: string
+          format: uuid
+        categoryName:
+          type: string
+        ownerId:
+          type: string
+          format: uuid
+        ownerName:
+          type: string
+        filename:
+          type: string
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+        status:
+          $ref: '#/components/schemas/DocumentStatus'
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    PresignRequest:
+      type: object
+      required: [categoryId, filename, mimeType, sizeBytes]
+      properties:
+        categoryId:
+          type: string
+          format: uuid
+        filename:
+          type: string
+          maxLength: 255
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 52428800
+          description: File size in bytes. Maximum 50 MB.
+
+    PresignResponse:
+      type: object
+      required: [documentId, uploadUrl, expiresAt]
+      properties:
+        documentId:
+          type: string
+          format: uuid
+          description: ID of the created (pending) document record
+        uploadUrl:
+          type: string
+          format: uri
+          description: Presigned S3 PUT URL. Valid for 5 minutes.
+        expiresAt:
+          type: string
+          format: date-time
+
+    DownloadUrlResponse:
+      type: object
+      required: [downloadUrl, expiresAt]
+      properties:
+        downloadUrl:
+          type: string
+          format: uri
+          description: Presigned S3 GET URL. Valid for 5 minutes.
+        expiresAt:
+          type: string
+          format: date-time
+
+    AppSettings:
+      type: object
+      required:
+        - theme
+        - language
+        - dateFormat
+        - tablePageSize
+        - emailNotifications
+        - pushNotifications
+        - desktopNotifications
+      properties:
+        theme:
+          $ref: '#/components/schemas/Theme'
+        language:
+          $ref: '#/components/schemas/Language'
+        dateFormat:
+          $ref: '#/components/schemas/DateFormat'
+        tablePageSize:
+          $ref: '#/components/schemas/PageSize'
+        emailNotifications:
+          type: boolean
+        pushNotifications:
+          type: boolean
+        desktopNotifications:
+          type: boolean
+
+    AppSettingsUpdate:
+      type: object
+      description: All fields optional — only provided fields are updated.
+      properties:
+        theme:
+          $ref: '#/components/schemas/Theme'
+        language:
+          $ref: '#/components/schemas/Language'
+        dateFormat:
+          $ref: '#/components/schemas/DateFormat'
+        tablePageSize:
+          $ref: '#/components/schemas/PageSize'
+        emailNotifications:
+          type: boolean
+        pushNotifications:
+          type: boolean
+        desktopNotifications:
+          type: boolean
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+          format: password
+
+    LoginResponse:
+      type: object
+      required: [user, permissions, theme]
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        permissions:
+          $ref: '#/components/schemas/RolePermissions'
+        theme:
+          $ref: '#/components/schemas/Theme'
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          format: password
+        newPassword:
+          type: string
+          minLength: 6
+          format: password
+
+    ProfileUpdateRequest:
+      type: object
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 100
+
+    # ── Report Responses ─────────────────────────────────────────────────────
+
+    UploadTrendResponse:
+      type: object
+      required: [categories, series]
+      description: Data for the upload trend area-spline chart (last 12 months).
+      properties:
+        categories:
+          type: array
+          items:
+            type: string
+          example: ["Jun 2024","Jul 2024","Aug 2024","Sep 2024","Oct 2024","Nov 2024","Dec 2024","Jan 2025","Feb 2025","Mar 2025","Apr 2025","May 2025"]
+          description: Month labels. Last entry is always the current month.
+        series:
+          type: array
+          items:
+            type: object
+            required: [name, data]
+            properties:
+              name:
+                type: string
+                description: Category name
+              data:
+                type: array
+                items:
+                  type: integer
+                  minimum: 0
+                description: Upload count per month (12 values, aligned with categories)
+
+    CategoryCountResponse:
+      type: object
+      required: [categories, data]
+      description: Data for the documents-per-category column chart.
+      properties:
+        categories:
+          type: array
+          items:
+            type: string
+          description: Category names
+        data:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+          description: Document count per category
+
+    StorageResponse:
+      type: object
+      required: [categories, data]
+      description: Data for the storage-by-category horizontal bar chart.
+      properties:
+        categories:
+          type: array
+          items:
+            type: string
+          description: Category names
+        data:
+          type: array
+          items:
+            type: integer
+            format: int64
+            minimum: 0
+          description: Total storage in bytes per category
+
+    RoleDistributionResponse:
+      type: object
+      required: [data]
+      description: Data for the role distribution donut chart.
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            required: [name, value]
+            properties:
+              name:
+                type: string
+                description: Role name
+              value:
+                type: integer
+                minimum: 0
+                description: Number of users with this role
+
+    # ── Audit ────────────────────────────────────────────────────────────────
+
+    AuditEvent:
+      type: object
+      required: [id, occurredAt, action, resourceType]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        occurredAt:
+          type: string
+          format: date-time
+          readOnly: true
+        actorUserId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null for system-generated events
+        actorName:
+          type: string
+          nullable: true
+        action:
+          type: string
+          description: Event action code, e.g. USER_CREATED, LOGIN_FAILED, DOCUMENT_DELETED
+          example: DOCUMENT_UPLOADED
+        resourceType:
+          type: string
+          description: Type of the affected resource, e.g. user, role, document
+          example: document
+        resourceId:
+          type: string
+          format: uuid
+          nullable: true
+        ip:
+          type: string
+          nullable: true
+          description: Originating IP address
+        payload:
+          type: object
+          nullable: true
+          description: Additional context (PII fields are excluded)
+          additionalProperties: true
+
+    # ── Error ────────────────────────────────────────────────────────────────
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        message:
+          type: string
+          description: Human-readable explanation
+        fields:
+          type: array
+          description: Per-field validation errors (present only for VALIDATION_ERROR)
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field:
+                type: string
+                description: JSON path to the invalid field
+              message:
+                type: string
+                description: Why the field failed validation
+
+    # ── Health ───────────────────────────────────────────────────────────────
+
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [UP, DOWN, OUT_OF_SERVICE]
+        components:
+          type: object
+          description: Per-component health (db, redis, s3)
+          additionalProperties:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [UP, DOWN, OUT_OF_SERVICE]
+              details:
+                type: object
+                additionalProperties: true

@@ -1,0 +1,17 @@
+.pgn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+
+  &__summary {
+    white-space: nowrap;
+  }
+
+  &__ellipsis .page-link {
+    pointer-events: none;
+    border-color: transparent;
+    background: transparent;
+  }
+}

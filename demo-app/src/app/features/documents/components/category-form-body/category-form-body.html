@@ -1,0 +1,97 @@
+@if (catStore.error()) {
+  <div class="alert alert-danger py-2 mb-3">{{ catStore.error() }}</div>
+}
+
+@if (catStore.loading() && isEdit) {
+  <div class="d-flex justify-content-center py-3">
+    <span class="spinner-border text-primary"></span>
+  </div>
+} @else {
+  <div class="row g-3">
+
+    <!-- Name -->
+    <div class="col-12 col-sm-6">
+      <label class="form-label fw-semibold" for="cfb-name">Category Name</label>
+      <input
+        id="cfb-name"
+        class="form-control"
+        [class.is-invalid]="isInvalid('name')"
+        [formControl]="$any(form.get('name'))"
+        placeholder="e.g. HR Documents"
+      />
+      <div class="invalid-feedback">Name is required (min 2 characters).</div>
+    </div>
+
+    <!-- Description -->
+    <div class="col-12 col-sm-6">
+      <label class="form-label fw-semibold" for="cfb-desc">Description</label>
+      <input
+        id="cfb-desc"
+        class="form-control"
+        [formControl]="$any(form.get('description'))"
+        placeholder="Brief description of this category"
+      />
+    </div>
+
+    <!-- Document Type -->
+    <div class="col-12 col-sm-6">
+      <label class="form-label fw-semibold" for="cfb-type">Document Type</label>
+      <select
+        id="cfb-type"
+        class="form-select"
+        [class.is-invalid]="isInvalid('documentType')"
+        [formControl]="$any(form.get('documentType'))"
+      >
+        <option value="">— Select type —</option>
+        @for (opt of docTypeOptions; track opt.value) {
+          <option [value]="opt.value">{{ opt.label }}</option>
+        }
+      </select>
+      <div class="invalid-feedback">Document type is required.</div>
+    </div>
+
+    <!-- Role Permission Matrix -->
+    <div class="col-12">
+      <label class="form-label fw-semibold">Role Permissions</label>
+
+      @if (roleStore.loading()) {
+        <div class="d-flex align-items-center gap-2 text-muted">
+          <span class="spinner-border spinner-border-sm"></span>
+          <small>Loading roles…</small>
+        </div>
+      } @else if (permArray.length === 0) {
+        <p class="text-muted small mb-0">No roles available.</p>
+      } @else {
+        <div class="cfb-matrix">
+          <table class="table table-sm table-bordered mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Role</th>
+                @for (col of permCols; track col.key) {
+                  <th class="text-center">{{ col.label }}</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (ctrl of permArray.controls; track $index) {
+                <tr [formGroup]="permGroupAt($index)">
+                  <td class="fw-semibold align-middle">{{ ctrl.value.roleName }}</td>
+                  @for (col of permCols; track col.key) {
+                    <td class="text-center align-middle">
+                      <input
+                        type="checkbox"
+                        class="form-check-input"
+                        [formControlName]="col.key"
+                      />
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+
+  </div>
+}

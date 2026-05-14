@@ -1,0 +1,123 @@
+<div class="dt-wrapper">
+
+  <!-- Table -->
+  <div class="table-responsive" [class.dt-dropdown-overflow]="hasDropdownFilters()">
+    <table class="table table-hover table-bordered align-middle mb-0">
+
+      <thead class="table-light">
+        <!-- Column headers -->
+        <tr>
+          @for (col of columns(); track col.key) {
+            <th scope="col" [class]="'text-' + (col.align ?? 'start')">
+              <div class="dt-th-inner">
+                <span>{{ col.label }}</span>
+                @if (col.sortable) {
+                  <button class="dt-sort-btn" type="button" (click)="sort(col.key)">
+                    <i class="bi {{ sortIcon(col.key) }}"></i>
+                  </button>
+                }
+              </div>
+            </th>
+          }
+        </tr>
+
+        <!-- Filter row -->
+        @if (hasFilters()) {
+          <tr class="dt-filter-row">
+            @for (col of columns(); track col.key) {
+              <th scope="col">
+                @if (col.filterable) {
+                  @if (col.filterType === 'dropdown') {
+                    <app-dropdown
+                      class="dt-filter-dropdown"
+                      [options]="dropdownFilterOptions(col)"
+                      [ngModel]="filterValue(col.key)"
+                      (ngModelChange)="setFilter(col.key, $event)"
+                      placeholder="All"
+                    />
+                  } @else {
+                    <input
+                      class="form-control form-control-sm"
+                      type="text"
+                      placeholder="Filter…"
+                      (input)="setFilter(col.key, $any($event.target).value)"
+                    />
+                  }
+                }
+              </th>
+            }
+          </tr>
+        }
+      </thead>
+
+      <tbody>
+        @if (loading()) {
+          <tr>
+            <td [attr.colspan]="columns().length" class="text-center dt-state-cell">
+              <div class="spinner-border spinner-border-sm text-primary me-2"></div>
+              Loading…
+            </td>
+          </tr>
+        } @else if (pagedData().length === 0) {
+          <tr>
+            <td [attr.colspan]="columns().length" class="text-center text-muted dt-state-cell">
+              <i class="bi bi-inbox fs-4 d-block mb-1"></i>
+              {{ emptyMessage() }}
+            </td>
+          </tr>
+        } @else {
+          @for (row of pagedData(); track $index) {
+            <tr class="dt-row" (click)="onRowClick(row)">
+              @for (col of columns(); track col.key) {
+                <td [class]="'text-' + (col.align ?? 'start')">
+                  @if (col.cellTemplate) {
+                    <ng-container
+                      [ngTemplateOutlet]="col.cellTemplate"
+                      [ngTemplateOutletContext]="{ $implicit: row[col.key], row: row }"
+                    />
+                  } @else {
+                    {{ cellValue(row, col) }}
+                  }
+                </td>
+              }
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Built-in pagination (hidden when showPagination=false) -->
+  @if (showPagination() && !loading() && total() > 0) {
+    <div class="dt-footer">
+      <small class="text-muted">
+        Showing {{ startRow() }}–{{ endRow() }} of {{ total() }} records
+      </small>
+
+      @if (pageCount() > 1) {
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            <li class="page-item" [class.disabled]="page() === 1">
+              <button class="page-link" type="button" (click)="goToPage(page() - 1)">
+                <i class="bi bi-chevron-left"></i>
+              </button>
+            </li>
+
+            @for (p of pageNumbers(); track p) {
+              <li class="page-item" [class.active]="p === page()">
+                <button class="page-link" type="button" (click)="goToPage(p)">{{ p }}</button>
+              </li>
+            }
+
+            <li class="page-item" [class.disabled]="page() === pageCount()">
+              <button class="page-link" type="button" (click)="goToPage(page() + 1)">
+                <i class="bi bi-chevron-right"></i>
+              </button>
+            </li>
+          </ul>
+        </nav>
+      }
+    </div>
+  }
+
+</div>

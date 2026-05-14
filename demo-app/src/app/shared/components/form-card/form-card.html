@@ -1,0 +1,9 @@
+<div class="card shadow-sm">
+  @if (title()) {
+    <div class="card-header bg-transparent fw-semibold">{{ title() }}</div>
+  }
+  <div class="card-body">
+    <ng-content />
+  </div>
+  <ng-content select="[card-footer]" />
+</div>

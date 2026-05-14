@@ -1,0 +1,81 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: demo
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: postgres
+      DB_NAME: demo
+      DB_USER: demo
+      DB_PASS: demo
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CORS_ORIGINS: http://localhost:4200
+      COOKIE_SECURE: "false"
+      UPLOAD_DIR: /app/uploads
+      CV_OUTPUT_DIR: /app/output
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-cv-extractor-secret}
+    volumes:
+      - uploads_data:/app/uploads
+      - cv_output_data:/app/output
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/liveness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  cv-extractor:
+    build: ../cv-batch-extractor
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      UPLOAD_DIR: /app/uploads
+      OUTPUT_DIR: /app/output
+      BACKEND_URL: http://app:8080
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-cv-extractor-secret}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3}
+    volumes:
+      - uploads_data:/app/uploads
+      - cv_output_data:/app/output
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  postgres_data:
+  uploads_data:
+  cv_output_data:

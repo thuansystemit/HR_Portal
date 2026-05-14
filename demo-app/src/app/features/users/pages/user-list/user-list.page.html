@@ -1,0 +1,50 @@
+<app-page-layout title="User Management" subtitle="Manage system users and their roles.">
+  <ng-container actions>
+    @if (auth.can('usersCreate')) {
+      <app-btn size="sm" icon="bi-person-plus" (btnClick)="openAdd()">Add User</app-btn>
+    }
+  </ng-container>
+
+  <app-data-table
+    [columns]="columns()"
+    [data]="store.users()"
+    [loading]="store.loading()"
+    [pageSize]="pageSize"
+    [showPagination]="false"
+    [controlledPage]="page()"
+    (stateChange)="onStateChange($event)"
+    emptyMessage="No users found."
+  />
+
+  <app-divider spacing="sm" thickness="0px" />
+
+  <app-pagination
+    [page]="page()"
+    [pageCount]="pageCount()"
+    [total]="total()"
+    [pageSize]="pageSize"
+    (pageChange)="page.set($event)"
+  />
+</app-page-layout>
+
+<!-- Status cell template -->
+<ng-template #statusTpl let-value>
+  <app-user-status-badge [status]="$any(value)" />
+</ng-template>
+
+<!-- Actions cell template -->
+<ng-template #actionsTpl let-row="row">
+  <div class="d-flex justify-content-center gap-2">
+    @if (auth.can('usersEdit')) {
+      <app-btn size="sm" variant="outline-primary" icon="bi-pencil" [iconOnly]="true"
+               title="Edit" (btnClick)="edit(row)" />
+    }
+    @if (auth.can('usersDelete')) {
+      <app-btn size="sm" variant="outline-danger" icon="bi-trash" [iconOnly]="true"
+               title="Delete" (btnClick)="confirmDelete(row)" />
+    }
+    @if (!auth.can('usersEdit') && !auth.can('usersDelete')) {
+      <span class="text-muted small">View only</span>
+    }
+  </div>
+</ng-template>
