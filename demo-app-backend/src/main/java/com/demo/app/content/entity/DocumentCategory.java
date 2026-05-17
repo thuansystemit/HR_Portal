@@ -30,6 +30,10 @@ public class DocumentCategory {
     private int documentCount = 0;
 
     @Builder.Default
+    @Column(nullable = false)
+    private boolean llmExtraction = true;
+
+    @Builder.Default
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 

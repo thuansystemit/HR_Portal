@@ -12,6 +12,7 @@ public record UpdateCategoryRequest(
         @NotBlank @Size(min = 2, max = 120) String name,
         @Size(max = 500) String description,
         @NotNull DocumentType documentType,
+        Boolean llmExtraction,
         List<PermissionEntry> permissions
 ) {
     public record PermissionEntry(

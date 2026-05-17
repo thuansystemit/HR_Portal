@@ -77,7 +77,7 @@ class DocumentCategoryServiceTest {
 
     @Test
     void create_succeeds_whenNameAvailable() {
-        var req = new CreateCategoryRequest("Contracts", "Legal docs", DocumentType.INVOICE, null);
+        var req = new CreateCategoryRequest("Contracts", "Legal docs", DocumentType.INVOICE, null, null);
         var cat = DocumentCategory.builder().id(CAT_ID).name("Contracts")
                 .documentType(DocumentType.INVOICE).documentCount(0).createdAt(Instant.now()).build();
 
@@ -98,7 +98,7 @@ class DocumentCategoryServiceTest {
                 .thenReturn(true);
 
         assertThatThrownBy(() -> categoryService.create(
-                new CreateCategoryRequest("Contracts", null, DocumentType.CV, null)))
+                new CreateCategoryRequest("Contracts", null, DocumentType.CV, null, null)))
                 .isInstanceOf(ConflictException.class);
     }
 
@@ -106,7 +106,7 @@ class DocumentCategoryServiceTest {
     void update_savesDocumentType() {
         var cat = DocumentCategory.builder().id(CAT_ID).name("HR Docs")
                 .documentType(DocumentType.INVOICE).documentCount(0).createdAt(Instant.now()).build();
-        var req = new UpdateCategoryRequest("HR Docs", "Updated", DocumentType.CV, null);
+        var req = new UpdateCategoryRequest("HR Docs", "Updated", DocumentType.CV, null, null);
 
         when(categoryRepository.findByIdAndDeletedAtIsNull(CAT_ID)).thenReturn(Optional.of(cat));
         when(categoryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));

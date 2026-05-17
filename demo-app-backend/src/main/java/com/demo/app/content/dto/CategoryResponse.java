@@ -13,5 +13,6 @@ public record CategoryResponse(
         int documentCount,
         List<CategoryPermissionDto> permissions,
         Instant createdAt,
-        DocumentType documentType
+        DocumentType documentType,
+        boolean llmExtraction
 ) {}

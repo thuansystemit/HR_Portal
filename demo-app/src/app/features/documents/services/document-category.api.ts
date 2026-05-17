@@ -12,6 +12,7 @@ interface BackendCategory {
   documentType:  string;
   documentCount: number;
   createdAt:     string;
+  llmExtraction: boolean;
   permissions: {
     roleId:    string;
     roleName:  string;
@@ -30,6 +31,7 @@ function mapCategory(b: BackendCategory): DocumentCategory {
     documentCount: b.documentCount,
     createdAt:     b.createdAt,
     updatedAt:     b.createdAt,
+    llmExtraction: b.llmExtraction ?? true,
     permissions:   b.permissions.map(p => ({
       roleId:    p.roleId,
       roleName:  p.roleName,

@@ -52,6 +52,7 @@ public class DocumentCategoryService {
                 .name(request.name())
                 .description(request.description())
                 .documentType(request.documentType())
+                .llmExtraction(request.llmExtraction() == null || request.llmExtraction())
                 .build();
         var saved = categoryRepository.save(cat);
 
@@ -76,6 +77,7 @@ public class DocumentCategoryService {
         cat.setName(request.name());
         cat.setDescription(request.description());
         cat.setDocumentType(request.documentType());
+        if (request.llmExtraction() != null) cat.setLlmExtraction(request.llmExtraction());
         categoryRepository.save(cat);
 
         if (request.permissions() != null) {
@@ -118,6 +120,7 @@ public class DocumentCategoryService {
                 })
                 .collect(Collectors.toList());
         return new CategoryResponse(cat.getId(), cat.getName(), cat.getDescription(),
-                cat.getDocumentCount(), perms, cat.getCreatedAt(), cat.getDocumentType());
+                cat.getDocumentCount(), perms, cat.getCreatedAt(), cat.getDocumentType(),
+                cat.isLlmExtraction());
     }
 }

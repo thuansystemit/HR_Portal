@@ -5,7 +5,7 @@ services:
     build: .
     container_name: cv-extractor
     volumes:
-      - ./cvs:/app/cvs
+      - ./cvs:/app/uploads
       - ./output:/app/output
 
 volumes:

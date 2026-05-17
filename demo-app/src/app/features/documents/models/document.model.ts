@@ -22,13 +22,15 @@ export interface DocumentCategory {
   documentCount: number;
   createdAt:     string;
   updatedAt:     string;
+  llmExtraction: boolean;
 }
 
 export interface DocumentCategoryDto {
-  name:         string;
-  description:  string;
-  documentType: DocumentType;
-  permissions:  CategoryRolePermission[];
+  name:          string;
+  description:   string;
+  documentType:  DocumentType;
+  permissions:   CategoryRolePermission[];
+  llmExtraction: boolean;
 }
 
 export interface AppDocument {

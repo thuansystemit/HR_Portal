@@ -1,6 +1,7 @@
 import logging
 
 from app.watcher import start
+from app.worker import WorkerPool
 
 logging.basicConfig(
     level=logging.INFO,
@@ -9,4 +10,8 @@ logging.basicConfig(
 )
 
 if __name__ == "__main__":
-    start()
+    pool = WorkerPool()
+    try:
+        start(pool)
+    finally:
+        pool.shutdown()

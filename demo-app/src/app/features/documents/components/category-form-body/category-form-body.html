@@ -50,6 +50,31 @@
       <div class="invalid-feedback">Document type is required.</div>
     </div>
 
+    <!-- LLM Extraction (CV only) -->
+    @if (isCvType) {
+      <div class="col-12">
+        <div class="form-check form-switch">
+          <input
+            id="cfb-llm"
+            type="checkbox"
+            class="form-check-input"
+            role="switch"
+            [formControl]="$any(form.get('llmExtraction'))"
+          />
+          <label class="form-check-label fw-semibold" for="cfb-llm">
+            Use LLM extraction
+          </label>
+        </div>
+        <small class="text-muted">
+          @if (form.get('llmExtraction')?.value) {
+            AI extracts structured data (name, experience, skills…) from the CV.
+          } @else {
+            Raw text only — faster, no AI call. Suitable for archival or manual review.
+          }
+        </small>
+      </div>
+    }
+
     <!-- Role Permission Matrix -->
     <div class="col-12">
       <label class="form-label fw-semibold">Role Permissions</label>

@@ -28,11 +28,16 @@ export class CategoryFormBody implements OnInit, OnDestroy, DialogFormBody {
   protected readonly docTypeOptions = DOCUMENT_TYPE_OPTIONS;
 
   protected form = this.fb.group({
-    name:         ['', [Validators.required, Validators.minLength(2)]],
-    description:  [''],
-    documentType: ['' as DocumentType | '', Validators.required],
-    permissions:  this.fb.array([]),
+    name:          ['', [Validators.required, Validators.minLength(2)]],
+    description:   [''],
+    documentType:  ['' as DocumentType | '', Validators.required],
+    llmExtraction: [true],
+    permissions:   this.fb.array([]),
   });
+
+  protected get isCvType(): boolean {
+    return this.form.get('documentType')?.value === 'CV';
+  }
 
   protected get permArray(): FormArray { return this.form.get('permissions') as FormArray; }
 
@@ -82,8 +87,8 @@ export class CategoryFormBody implements OnInit, OnDestroy, DialogFormBody {
     });
   }
 
-  private applyCategory(cat: { name: string; description: string; documentType: DocumentType; permissions: CategoryRolePermission[] }): void {
-    this.form.patchValue({ name: cat.name, description: cat.description, documentType: cat.documentType });
+  private applyCategory(cat: { name: string; description: string; documentType: DocumentType; permissions: CategoryRolePermission[]; llmExtraction?: boolean }): void {
+    this.form.patchValue({ name: cat.name, description: cat.description, documentType: cat.documentType, llmExtraction: cat.llmExtraction ?? true });
     this.permArray.controls.forEach(ctrl => {
       const match = cat.permissions.find(p => p.roleId === ctrl.value.roleId);
       if (match) ctrl.patchValue(match, { emitEvent: false });
@@ -105,10 +110,11 @@ export class CategoryFormBody implements OnInit, OnDestroy, DialogFormBody {
 
     const raw = this.form.getRawValue();
     const dto: DocumentCategoryDto = {
-      name:         raw.name!,
-      description:  raw.description ?? '',
-      documentType: raw.documentType as DocumentType,
-      permissions:  raw.permissions as CategoryRolePermission[],
+      name:          raw.name!,
+      description:   raw.description ?? '',
+      documentType:  raw.documentType as DocumentType,
+      llmExtraction: raw.documentType === 'CV' ? (raw.llmExtraction ?? true) : true,
+      permissions:   raw.permissions as CategoryRolePermission[],
     };
 
     return new Promise<boolean>(resolve => {
