@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from langchain_core.exceptions import OutputParserException
+
 from app.backend_client import get_extraction_mode
 from app.config import settings
 from app.domain.cv_schema import CvExtraction
@@ -17,11 +19,9 @@ from app.guardrails.input.text_extractor import TextExtractor
 from app.guardrails.input.text_length import TextLengthGuard
 from app.guardrails.input.text_quality import TextQualityGuard
 from app.guardrails.output.confidence import ConfidenceGuard
-from app.guardrails.output.json_parse import JsonParseGuard
 from app.guardrails.output.sanitize import SanitizeGuard
-from app.guardrails.output.schema import SchemaGuard
 from app.guardrails.output.semantic import SemanticGuard
-from app.llm_service import ask_llm
+from app.llm_chain import invoke_extraction
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +60,6 @@ _INPUT_PIPELINE_LITE = GuardrailPipeline([
 ])
 
 _OUTPUT_PIPELINE = GuardrailPipeline([
-    JsonParseGuard(),
-    SchemaGuard(),
     SemanticGuard(),
     ConfidenceGuard(),
     SanitizeGuard(),
@@ -128,8 +126,23 @@ class Pipeline:
             input_pipeline.run(ctx)
 
             if not _is_blocked(ctx.reports):
-                ctx.llm_raw = ask_llm(ctx.prompt_text or ctx.raw_text or "")
-                _OUTPUT_PIPELINE.run(ctx)
+                try:
+                    ctx.cv_data = invoke_extraction(ctx.prompt_text or ctx.raw_text or "")
+                    ctx.raw_dict = ctx.cv_data.model_dump()
+                except OutputParserException as exc:
+                    logger.error(
+                        "Document %s: LLM output could not be parsed after self-correction: %s",
+                        document_id,
+                        exc,
+                    )
+                    ctx.reports.append(GuardrailReport(
+                        guard="llm_extraction",
+                        status="BLOCK",
+                        reason=f"llm_extraction: could not parse output after self-correction — {exc}",
+                    ))
+
+                if not _is_blocked(ctx.reports):
+                    _OUTPUT_PIPELINE.run(ctx)
 
             status = _aggregate_status(ctx.reports)
             output_file = _write_json(ctx) if status in ("PASS", "DEGRADED") else None

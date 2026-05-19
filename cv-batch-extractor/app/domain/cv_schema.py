@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class WorkExperience(BaseModel):
@@ -57,6 +57,8 @@ class Publication(BaseModel):
 
 
 class CvExtraction(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     fullName: str | None = None
     email: str | None = None
     phone: str | None = None

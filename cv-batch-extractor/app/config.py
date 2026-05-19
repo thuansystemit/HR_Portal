@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     cb_window_seconds: int = 60
     cb_cooldown_seconds: int = 30
 
+    # LangChain output parser
+    output_fixing_enabled: bool = True
+    output_fixing_max_retries: int = 3
+
     # Output sanitize field length caps (chars)
     sanitize_max_full_name: int = 200
     sanitize_max_email: int = 320
