@@ -1,0 +1,49 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'demo-app/**'
+      - '.github/workflows/frontend-ci.yml'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'demo-app/**'
+      - '.github/workflows/frontend-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (Angular 21 / Node 22)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: demo-app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: demo-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build (production)
+        run: npm run build -- --configuration=production
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: angular-dist
+          path: demo-app/dist/
+          retention-days: 14
