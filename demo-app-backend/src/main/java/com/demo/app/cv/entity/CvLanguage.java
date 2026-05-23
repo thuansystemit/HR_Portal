@@ -26,7 +26,7 @@ public class CvLanguage {
     @Column(nullable = false, length = 100)
     private String language;
 
-    @Column(length = 20)
+    @Column(length = 100)
     private String proficiency;
 
     @Column(nullable = false, updatable = false)

@@ -6,8 +6,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class WorkExperience(BaseModel):
-    company: str
-    title: str
+    company: str | None = None
+    title: str | None = None
     startDate: str | None = None
     startDatePrecision: Literal["YEAR", "MONTH"] | None = None
     endDate: str | None = None
@@ -20,22 +20,22 @@ class WorkExperience(BaseModel):
 
 
 class Education(BaseModel):
-    institution: str
+    institution: str | None = None
     degree: str | None = None
     fieldOfStudy: str | None = None
     startYear: int | None = None
     endYear: int | None = None
     gpa: float | None = None
-    honors: str | None = None
+    honors: list[str] | str | None = None
 
 
 class Language(BaseModel):
-    language: str
-    proficiency: Literal["Native", "Fluent", "Professional", "Conversational", "Basic"]
+    language: str | None = None
+    proficiency: str | None = None
 
 
 class Certification(BaseModel):
-    name: str
+    name: str | None = None
     issuer: str | None = None
     issuedDate: str | None = None
     expiryDate: str | None = None
@@ -43,14 +43,14 @@ class Certification(BaseModel):
 
 
 class Project(BaseModel):
-    name: str
+    name: str | None = None
     description: str | None = None
     technologies: list[str] = Field(default_factory=list)
     url: str | None = None
 
 
 class Publication(BaseModel):
-    title: str
+    title: str | None = None
     journal: str | None = None
     year: int | None = None
     url: str | None = None

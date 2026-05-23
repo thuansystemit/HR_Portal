@@ -42,9 +42,14 @@ public class Document {
 
     private Instant deletedAt;
 
+    @Enumerated(EnumType.STRING)
     @Column(length = 20)
-    private String extractionStatus;
+    private ExtractionStatus extractionStatus;
 
     @Column(columnDefinition = "TEXT")
     private String extractionError;
+
+    private Instant extractionStartedAt;
+
+    private Instant extractionFinishedAt;
 }

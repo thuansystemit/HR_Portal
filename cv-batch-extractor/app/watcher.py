@@ -12,10 +12,13 @@ from app.worker import WorkerPool
 logger = logging.getLogger(__name__)
 
 
-class CvFileHandler(FileSystemEventHandler):
+_SUPPORTED_TYPES = {"cv", "invoice"}
+
+
+class DocumentFileHandler(FileSystemEventHandler):
     """
-    Expects upload path structure: {upload_dir}/cv/{categoryId}/{documentId}/{filename}
-    Only files under the cv/ subtree are processed; all other document types are ignored.
+    Expects upload path structure: {upload_dir}/{documentType}/{categoryId}/{documentId}/{filename}
+    Processes files under the cv/ and invoice/ subtrees; all other paths are ignored.
     """
 
     def __init__(self, pool: WorkerPool) -> None:
@@ -36,7 +39,8 @@ class CvFileHandler(FileSystemEventHandler):
             if len(parts) < 4:
                 logger.warning("Unexpected path depth, skipping: %s", path)
                 return
-            if parts[0].lower() != "cv":
+            document_type = parts[0].lower()
+            if document_type not in _SUPPORTED_TYPES:
                 return
             category_id = parts[1]
             document_id = parts[2]
@@ -44,8 +48,11 @@ class CvFileHandler(FileSystemEventHandler):
             logger.warning("File outside upload dir, skipping: %s", path)
             return
 
-        logger.info("CV detected: %s  doc=%s  cat=%s", path.name, document_id, category_id)
-        self._pool.submit(document_id, category_id, str(path))
+        logger.info(
+            "%s detected: %s  doc=%s  cat=%s",
+            document_type.upper(), path.name, document_id, category_id,
+        )
+        self._pool.submit(document_id, category_id, str(path), document_type.upper())
 
 
 def start(pool: WorkerPool) -> None:
@@ -53,9 +60,9 @@ def start(pool: WorkerPool) -> None:
     Path(settings.output_dir).mkdir(parents=True, exist_ok=True)
 
     observer = Observer()
-    observer.schedule(CvFileHandler(pool), settings.upload_dir, recursive=True)
+    observer.schedule(DocumentFileHandler(pool), settings.upload_dir, recursive=True)
     observer.start()
-    logger.info("Watching %s for new CV files", settings.upload_dir)
+    logger.info("Watching %s for new CV and Invoice files", settings.upload_dir)
 
     try:
         while True:

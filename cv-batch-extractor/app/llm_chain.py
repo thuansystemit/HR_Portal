@@ -11,20 +11,26 @@ from langchain_ollama import ChatOllama
 
 from app.config import settings
 from app.domain.cv_schema import CvExtraction
+from app.domain.invoice_schema import InvoiceExtraction
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["invoke_extraction", "CircuitOpenError", "OutputParserException"]
+__all__ = ["invoke_extraction", "invoke_invoice_extraction", "CircuitOpenError", "OutputParserException"]
 
-# ── Prompt ─────────────────────────────────────────────────────────────────────
-# Use plain str.replace so the JSON schema's { } characters in cv_prompt.txt
-# are never misread as f-string template variables.
+# ── Prompts ─────────────────────────────────────────────────────────────────────
+# Use plain str.replace so the JSON schema's { } characters are never
+# misread as f-string template variables.
 
 _PROMPT_TEMPLATE = (Path(__file__).parent.parent / "cv_prompt.txt").read_text()
+_INVOICE_PROMPT_TEMPLATE = (Path(__file__).parent.parent / "invoice_prompt.txt").read_text()
 
 
 def _build_messages(text: str) -> list[HumanMessage]:
     return [HumanMessage(content=_PROMPT_TEMPLATE.replace("{{TEXT}}", text))]
+
+
+def _build_invoice_messages(text: str) -> list[HumanMessage]:
+    return [HumanMessage(content=_INVOICE_PROMPT_TEMPLATE.replace("{{TEXT}}", text))]
 
 
 # ── Circuit Breaker ─────────────────────────────────────────────────────────────
@@ -106,14 +112,15 @@ _llm = ChatOllama(
 )
 
 _parser = PydanticOutputParser(pydantic_object=CvExtraction)
+_invoice_parser = PydanticOutputParser(pydantic_object=InvoiceExtraction)
 
 # ── Self-correction ─────────────────────────────────────────────────────────────
 
 
-def _self_correct(failed_content: str, error: str) -> str:
+def _self_correct(failed_content: str, error: str, schema_name: str = "CV extraction") -> str:
     """Ask the LLM to fix its own structurally invalid JSON output."""
     fix_prompt = (
-        "The JSON you returned does not match the required CV extraction schema.\n"
+        f"The JSON you returned does not match the required {schema_name} schema.\n"
         f"Error: {error}\n\n"
         "Return ONLY the corrected JSON. No explanation, no markdown.\n\n"
         f"Incorrect output:\n{failed_content}"
@@ -122,29 +129,18 @@ def _self_correct(failed_content: str, error: str) -> str:
     return response.content
 
 
-# ── Public API ─────────────────────────────────────────────────────────────────
-
-
-def invoke_extraction(text: str) -> CvExtraction:
-    """
-    Call the LLM and parse its JSON response into a CvExtraction instance.
-
-    Error handling:
-    - Network/timeout failures: retried up to llm_max_retries times.
-    - CircuitOpenError: re-raised immediately → ERROR in the pipeline.
-    - OutputParserException: if output_fixing_enabled, attempts self-correction
-      up to output_fixing_max_retries times before re-raising → BLOCK in the pipeline.
-    """
+def _invoke_with_retry(messages_fn, parser, schema_name: str):
+    """Shared retry + circuit-breaker logic for any extraction call."""
     _breaker.check()
     last_err: Exception | None = None
 
     for attempt in range(1, settings.llm_max_retries + 1):
         _breaker.check()
         try:
-            content = _llm.invoke(_build_messages(text)).content
+            content = _llm.invoke(messages_fn()).content
 
             try:
-                result = _parser.parse(content)
+                result = parser.parse(content)
             except OutputParserException as parse_exc:
                 if not settings.output_fixing_enabled:
                     raise
@@ -152,9 +148,9 @@ def invoke_extraction(text: str) -> CvExtraction:
                     "LLM output parse failed, attempting self-correction: %s", parse_exc
                 )
                 for fix_n in range(settings.output_fixing_max_retries):
-                    content = _self_correct(content, str(parse_exc))
+                    content = _self_correct(content, str(parse_exc), schema_name)
                     try:
-                        result = _parser.parse(content)
+                        result = parser.parse(content)
                         logger.info("Self-correction succeeded on attempt %d", fix_n + 1)
                         break
                     except OutputParserException as next_exc:
@@ -162,7 +158,7 @@ def invoke_extraction(text: str) -> CvExtraction:
                         if fix_n == settings.output_fixing_max_retries - 1:
                             raise
                 else:
-                    raise  # should not reach here, but keeps mypy happy
+                    raise
 
             _breaker.record_success()
             return result
@@ -183,3 +179,24 @@ def invoke_extraction(text: str) -> CvExtraction:
     raise RuntimeError(
         f"LLM failed after {settings.llm_max_retries} attempts"
     ) from last_err
+
+
+# ── Public API ─────────────────────────────────────────────────────────────────
+
+
+def invoke_extraction(text: str) -> CvExtraction:
+    """Call the LLM and parse its response into a CvExtraction instance."""
+    return _invoke_with_retry(
+        lambda: _build_messages(text),
+        _parser,
+        "CV extraction",
+    )
+
+
+def invoke_invoice_extraction(text: str) -> InvoiceExtraction:
+    """Call the LLM and parse its response into an InvoiceExtraction instance."""
+    return _invoke_with_retry(
+        lambda: _build_invoice_messages(text),
+        _invoice_parser,
+        "invoice extraction",
+    )

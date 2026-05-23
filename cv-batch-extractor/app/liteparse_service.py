@@ -13,7 +13,7 @@ _LIT_TIMEOUT = 120
 def _call_liteparse_cli(file_path: str) -> str:
     """Call the LiteParse CLI and return concatenated text from all pages."""
     result = subprocess.run(
-        ["lit", "parse", file_path, "--output", "json"],
+        ["lit", "parse", file_path, "--format", "json", "--quiet"],
         capture_output=True,
         text=True,
         timeout=_LIT_TIMEOUT,
@@ -23,19 +23,30 @@ def _call_liteparse_cli(file_path: str) -> str:
             f"liteparse exited {result.returncode}: {result.stderr.strip()}"
         )
 
+    if not result.stdout.strip():
+        raise RuntimeError(
+            f"liteparse produced no output (stderr: {result.stderr.strip() or 'none'})"
+        )
+
     data = json.loads(result.stdout)
 
-    # LiteParse output: list of pages, each with a list of text blocks
+    # LiteParse output: { "pages": [{ "text": "...", "textItems": [...] }] }
     pages = data if isinstance(data, list) else data.get("pages", [])
     parts: list[str] = []
     for page in pages:
-        blocks = page.get("blocks") or page.get("text_blocks") or []
+        # Primary: full page text
+        page_text = page.get("text") or ""
+        if page_text.strip():
+            parts.append(page_text.strip())
+            continue
+        # Secondary: structured blocks (future-proof for format changes)
+        blocks = page.get("blocks") or page.get("text_blocks") or page.get("textItems") or []
         for block in blocks:
-            text = block.get("text") or block.get("content") or ""
-            if text.strip():
+            text = block.get("text") or block.get("content") or (block if isinstance(block, str) else "")
+            if isinstance(text, str) and text.strip():
                 parts.append(text.strip())
 
-    # Fallback: if structured blocks not found, try a top-level text key
+    # Last-resort: top-level text key
     if not parts:
         top_text = data.get("text") or data.get("content") or ""
         if top_text:

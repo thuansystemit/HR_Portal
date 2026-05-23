@@ -1,28 +1,36 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
-import { AppDocument, AppDocumentDto } from '../models/document.model';
+import { AppDocument, AppDocumentDto, ExtractionStatus } from '../models/document.model';
 import { environment } from '../../../../environments/environment';
 
 interface BackendDoc {
-  id:         string;
-  categoryId: string;
-  name:       string;
-  mimeType:   string;
-  sizeBytes:  number;
-  uploadedBy: string;
-  uploadedAt: string;
+  id:                   string;
+  categoryId:           string;
+  name:                 string;
+  mimeType:             string;
+  sizeBytes:            number;
+  uploadedBy:           string;
+  uploadedAt:           string;
+  extractionStatus:     ExtractionStatus | null;
+  extractionError:      string | null;
+  extractionStartedAt:  string | null;
+  extractionFinishedAt: string | null;
 }
 
 function mapDoc(b: BackendDoc): AppDocument {
   return {
-    id:         b.id,
-    categoryId: b.categoryId,
-    name:       b.name,
-    mimeType:   b.mimeType,
-    fileSize:   b.sizeBytes,
-    uploadedBy: b.uploadedBy,
-    createdAt:  b.uploadedAt,
+    id:                   b.id,
+    categoryId:           b.categoryId,
+    name:                 b.name,
+    mimeType:             b.mimeType,
+    fileSize:             b.sizeBytes,
+    uploadedBy:           b.uploadedBy,
+    createdAt:            b.uploadedAt,
+    extractionStatus:     b.extractionStatus ?? null,
+    extractionError:      b.extractionError ?? null,
+    extractionStartedAt:  b.extractionStartedAt ?? null,
+    extractionFinishedAt: b.extractionFinishedAt ?? null,
   };
 }
 
@@ -30,6 +38,7 @@ function mapDoc(b: BackendDoc): AppDocument {
 export class DocumentApi {
   private readonly http = inject(HttpClient);
   private readonly base = `${environment.apiUrl}/categories`;
+  private readonly docBase = `${environment.apiUrl}/documents`;
 
   getByCategory(categoryId: string): Observable<AppDocument[]> {
     return this.http
@@ -43,6 +52,10 @@ export class DocumentApi {
     return this.http
       .post<BackendDoc>(`${this.base}/${dto.categoryId}/documents`, form)
       .pipe(map(mapDoc));
+  }
+
+  retryExtraction(documentId: string): Observable<void> {
+    return this.http.post<void>(`${this.docBase}/${documentId}/retry-extraction`, {});
   }
 
   download(doc: AppDocument): void {

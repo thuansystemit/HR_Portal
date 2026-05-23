@@ -41,8 +41,9 @@ export class DocumentListPage implements OnInit {
   protected canUpload    = computed(() => this.catPerm()?.canUpload  ?? false);
   protected canDeleteDoc = computed(() => this.catPerm()?.canDelete  ?? false);
 
-  @ViewChild('docTypeTpl', { static: true }) docTypeTpl!: TemplateRef<{ $implicit: unknown; row: unknown }>;
-  @ViewChild('actionsTpl', { static: true }) actionsTpl!: TemplateRef<{ $implicit: unknown; row: unknown }>;
+  @ViewChild('docTypeTpl',    { static: true }) docTypeTpl!:    TemplateRef<{ $implicit: unknown; row: unknown }>;
+  @ViewChild('extractionTpl', { static: true }) extractionTpl!: TemplateRef<{ $implicit: unknown; row: unknown }>;
+  @ViewChild('actionsTpl',    { static: true }) actionsTpl!:    TemplateRef<{ $implicit: unknown; row: unknown }>;
 
   readonly pageSize = 10;
   protected page      = signal(1);
@@ -56,21 +57,33 @@ export class DocumentListPage implements OnInit {
     this.catStore.loadById(this.catId);
     this.docStore.loadByCategory(this.catId);
     this.columns.set([
-      { key: 'name',         label: 'Document',    sortable: true, filterable: true },
-      { key: 'documentType', label: 'Doc Type',    align: 'center', cellTemplate: this.docTypeTpl },
-      { key: 'mimeType',     label: 'MIME Type',   sortable: true },
-      { key: 'fileSize',    label: 'Size',        sortable: true, align: 'end',
+      { key: 'name',            label: 'Document',   sortable: true, filterable: true },
+      { key: 'documentType',    label: 'Doc Type',   align: 'center', cellTemplate: this.docTypeTpl },
+      { key: 'mimeType',        label: 'MIME Type',  sortable: true },
+      { key: 'fileSize',        label: 'Size',       sortable: true, align: 'end',
         formatter: v => formatFileSize(Number(v)) },
-      { key: 'uploadedBy',  label: 'Uploaded By', sortable: true },
-      { key: 'uploadStatus', label: 'Status',     sortable: true },
-      { key: 'createdAt',   label: 'Uploaded',    sortable: true, formatter: appFormatDate },
-      { key: 'actions',     label: 'Actions',     align: 'center', cellTemplate: this.actionsTpl },
+      { key: 'uploadedBy',      label: 'Uploaded By', sortable: true },
+      { key: 'extractionStatus', label: 'Extraction', align: 'center', cellTemplate: this.extractionTpl },
+      { key: 'createdAt',       label: 'Uploaded',   sortable: true, formatter: appFormatDate },
+      { key: 'actions',         label: 'Actions',    align: 'center', cellTemplate: this.actionsTpl },
     ]);
   }
 
   onStateChange(state: PageEvent): void {
     this.total.set(state.total);
     if (state.page !== this.page()) this.page.set(state.page);
+  }
+
+  protected asDoc(row: unknown): AppDocument {
+    return row as AppDocument;
+  }
+
+  protected isExtractionSuccess(row: unknown): boolean {
+    return (row as AppDocument).extractionStatus === 'SUCCESS';
+  }
+
+  protected retryExtraction(row: unknown): void {
+    this.docStore.retryExtraction((row as AppDocument).id);
   }
 
   openPreview(doc: AppDocument): void {
@@ -92,8 +105,14 @@ export class DocumentListPage implements OnInit {
     }, { categoryId: this.catId });
   }
 
-  viewCandidate(_row: unknown): void {
+  viewCandidate(row: unknown): void {
+    if (!this.isExtractionSuccess(row)) return;
     this.router.navigate(['/cv-candidates', this.catId]);
+  }
+
+  viewInvoice(row: unknown): void {
+    if (!this.isExtractionSuccess(row)) return;
+    this.router.navigate(['/invoice-records', this.catId]);
   }
 
   async confirmDelete(row: unknown): Promise<void> {

@@ -1,0 +1,232 @@
+<app-page-layout
+  [title]="record()?.invoiceNumber ?? 'Invoice Detail'"
+  subtitle="Extracted invoice data."
+>
+  <ng-container actions>
+    <button class="btn btn-sm btn-outline-secondary" (click)="goBack()">
+      <i class="bi bi-arrow-left me-1"></i> Back to Invoices
+    </button>
+  </ng-container>
+
+  @if (store.loading()) {
+    <div class="d-flex justify-content-center py-5">
+      <div class="spinner-border text-success" role="status">
+        <span class="visually-hidden">Loading…</span>
+      </div>
+    </div>
+  }
+
+  @if (store.error()) {
+    <div class="alert alert-danger">{{ store.error() }}</div>
+  }
+
+  @if (record(); as inv) {
+
+    <!-- Header card -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
+          <div>
+            <h5 class="card-title mb-1 fw-bold">
+              Invoice {{ inv.invoiceNumber ?? '—' }}
+            </h5>
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+              @if (inv.confidenceOverall === 'HIGH') {
+                <span class="badge bg-success">High Confidence</span>
+              } @else if (inv.confidenceOverall === 'MEDIUM') {
+                <span class="badge bg-warning text-dark">Medium Confidence</span>
+              } @else {
+                <span class="badge bg-danger">Low Confidence</span>
+              }
+              @if (inv.currency) {
+                <span class="badge bg-secondary">{{ inv.currency }}</span>
+              }
+            </div>
+            <div class="d-flex flex-wrap gap-3 text-muted small">
+              @if (inv.invoiceDate) {
+                <span><i class="bi bi-calendar me-1"></i>Invoice date: {{ inv.invoiceDate }}</span>
+              }
+              @if (inv.dueDate) {
+                <span><i class="bi bi-calendar-check me-1"></i>Due: {{ inv.dueDate }}</span>
+              }
+            </div>
+          </div>
+
+          <div class="text-end">
+            @if (inv.total != null) {
+              <div class="fs-4 fw-bold text-success">
+                {{ inv.total | number:'1.2-2' }} {{ inv.currency ?? '' }}
+              </div>
+              <small class="text-muted">Total</small>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4">
+
+      <!-- Vendor -->
+      @if (inv.vendor) {
+        <div class="col-12 col-md-6">
+          <div class="card h-100">
+            <div class="card-header fw-semibold">
+              <i class="bi bi-building me-2"></i>Vendor
+            </div>
+            <div class="card-body">
+              <p class="mb-1 fw-semibold">{{ inv.vendor['name'] ?? '—' }}</p>
+              @if (inv.vendor['address']) {
+                <p class="mb-1 text-muted small">{{ inv.vendor['address'] }}</p>
+              }
+              @if (inv.vendor['taxId']) {
+                <p class="mb-1 small"><strong>Tax ID:</strong> {{ inv.vendor['taxId'] }}</p>
+              }
+              @if (inv.vendor['email']) {
+                <p class="mb-1 small"><i class="bi bi-envelope me-1"></i>{{ inv.vendor['email'] }}</p>
+              }
+              @if (inv.vendor['phone']) {
+                <p class="mb-0 small"><i class="bi bi-telephone me-1"></i>{{ inv.vendor['phone'] }}</p>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Buyer -->
+      @if (inv.buyer) {
+        <div class="col-12 col-md-6">
+          <div class="card h-100">
+            <div class="card-header fw-semibold">
+              <i class="bi bi-person-vcard me-2"></i>Buyer
+            </div>
+            <div class="card-body">
+              <p class="mb-1 fw-semibold">{{ inv.buyer['name'] ?? '—' }}</p>
+              @if (inv.buyer['address']) {
+                <p class="mb-1 text-muted small">{{ inv.buyer['address'] }}</p>
+              }
+              @if (inv.buyer['taxId']) {
+                <p class="mb-1 small"><strong>Tax ID:</strong> {{ inv.buyer['taxId'] }}</p>
+              }
+              @if (inv.buyer['email']) {
+                <p class="mb-1 small"><i class="bi bi-envelope me-1"></i>{{ inv.buyer['email'] }}</p>
+              }
+              @if (inv.buyer['phone']) {
+                <p class="mb-0 small"><i class="bi bi-telephone me-1"></i>{{ inv.buyer['phone'] }}</p>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Line Items -->
+      @if (inv.lineItems && inv.lineItems.length > 0) {
+        <div class="col-12">
+          <div class="card">
+            <div class="card-header fw-semibold">
+              <i class="bi bi-list-ul me-2"></i>Line Items
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-striped mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Description</th>
+                      <th class="text-end">Qty</th>
+                      <th class="text-end">Unit Price</th>
+                      <th class="text-end">Tax %</th>
+                      <th class="text-end">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (item of inv.lineItems; track $index) {
+                      <tr>
+                        <td>{{ item['description'] }}</td>
+                        <td class="text-end">{{ item['quantity'] ?? '—' }}</td>
+                        <td class="text-end">{{ item['unitPrice'] != null ? (item['unitPrice'] | number:'1.2-2') : '—' }}</td>
+                        <td class="text-end">{{ item['taxRate'] != null ? item['taxRate'] + '%' : '—' }}</td>
+                        <td class="text-end">{{ item['amount'] != null ? (item['amount'] | number:'1.2-2') : '—' }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Totals -->
+      <div class="col-12 col-md-6 offset-md-6">
+        <div class="card">
+          <div class="card-body">
+            <table class="table table-sm mb-0">
+              <tbody>
+                @if (inv.subtotal != null) {
+                  <tr>
+                    <td class="text-muted">Subtotal</td>
+                    <td class="text-end">{{ inv.subtotal | number:'1.2-2' }}</td>
+                  </tr>
+                }
+                @if (inv.taxAmount != null) {
+                  <tr>
+                    <td class="text-muted">Tax</td>
+                    <td class="text-end">{{ inv.taxAmount | number:'1.2-2' }}</td>
+                  </tr>
+                }
+                @if (inv.total != null) {
+                  <tr class="fw-bold">
+                    <td>Total</td>
+                    <td class="text-end">{{ inv.total | number:'1.2-2' }} {{ inv.currency ?? '' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notes / Payment Terms -->
+      @if (inv.notes || inv.paymentTerms) {
+        <div class="col-12">
+          <div class="card">
+            <div class="card-header fw-semibold">
+              <i class="bi bi-info-circle me-2"></i>Additional Info
+            </div>
+            <div class="card-body">
+              @if (inv.paymentTerms) {
+                <p class="mb-1"><strong>Payment Terms:</strong> {{ inv.paymentTerms }}</p>
+              }
+              @if (inv.notes) {
+                <p class="mb-0 text-muted">{{ inv.notes }}</p>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Extraction Quality -->
+      @if (inv.lowConfidenceFields?.length || inv.missingFields?.length) {
+        <div class="col-12">
+          <div class="card border-warning">
+            <div class="card-header fw-semibold text-warning-emphasis">
+              <i class="bi bi-exclamation-triangle me-2"></i>Extraction Quality Notes
+            </div>
+            <div class="card-body">
+              @if (inv.lowConfidenceFields?.length) {
+                <p class="mb-1 small">
+                  <strong>Low confidence fields:</strong> {{ inv.lowConfidenceFields.join(', ') }}
+                </p>
+              }
+              @if (inv.missingFields?.length) {
+                <p class="mb-0 small">
+                  <strong>Missing fields:</strong> {{ inv.missingFields.join(', ') }}
+                </p>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
+    </div>
+  }
+</app-page-layout>

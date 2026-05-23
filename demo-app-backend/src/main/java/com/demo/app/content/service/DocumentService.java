@@ -4,12 +4,14 @@ import com.demo.app.content.dto.DocumentResponse;
 import com.demo.app.content.dto.DownloadResult;
 import com.demo.app.content.entity.Document;
 import com.demo.app.content.entity.DocumentType;
+import com.demo.app.content.entity.ExtractionStatus;
 import com.demo.app.content.repository.DocumentCategoryRepository;
 import com.demo.app.content.repository.DocumentRepository;
 import com.demo.app.iam.dto.PagedResponse;
 import com.demo.app.insights.service.ReportService;
 import com.demo.app.platform.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -19,8 +21,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DocumentService {
@@ -57,13 +61,13 @@ public class DocumentService {
                 .uploadStatus("committed")
                 .build();
 
-        if (category.getDocumentType() == DocumentType.CV) {
-            doc.setExtractionStatus("PENDING");
+        if (category.getDocumentType() == DocumentType.CV
+                || category.getDocumentType() == DocumentType.INVOICE) {
+            doc.setExtractionStatus(ExtractionStatus.PENDING);
         }
 
         doc = documentRepository.save(doc);
 
-        // Prefix with lowercase document type so cv-batch-extractor watches only the cv/ subtree
         String typePrefix = category.getDocumentType().name().toLowerCase();
         String key = typePrefix + "/" + categoryId + "/" + doc.getId() + "/" + filename;
         doc.setStorageKey(key);
@@ -106,21 +110,53 @@ public class DocumentService {
     }
 
     @Transactional
-    public void updateExtractionStatus(UUID documentId, String status) {
+    public void updateExtractionStatus(UUID documentId, ExtractionStatus newStatus) {
+        updateExtractionStatus(documentId, newStatus, null, null);
+    }
+
+    @Transactional
+    public void updateExtractionStatus(UUID documentId, ExtractionStatus newStatus,
+                                        String errorPhase, String errorMessage) {
         documentRepository.findById(documentId).ifPresent(doc -> {
-            doc.setExtractionStatus(status);
-            doc.setExtractionError(null);
+            ExtractionStatus current = doc.getExtractionStatus();
+            if (current != null && !current.canTransitionTo(newStatus)) {
+                log.warn("Invalid extraction transition {} -> {} for document {}", current, newStatus, documentId);
+                return;
+            }
+            doc.setExtractionStatus(newStatus);
+            doc.setExtractionError(errorPhase != null ? "[" + errorPhase + "] " + errorMessage : null);
+            if (newStatus == ExtractionStatus.PROCESSING) {
+                doc.setExtractionStartedAt(Instant.now());
+            } else if (newStatus == ExtractionStatus.SUCCESS || newStatus == ExtractionStatus.FAILED) {
+                doc.setExtractionFinishedAt(Instant.now());
+            }
             documentRepository.save(doc);
         });
     }
 
     @Transactional
-    public void updateExtractionStatus(UUID documentId, String status, String errorPhase, String errorMessage) {
+    public void resetForRetry(UUID documentId) {
         documentRepository.findById(documentId).ifPresent(doc -> {
-            doc.setExtractionStatus(status);
-            doc.setExtractionError("[" + errorPhase + "] " + errorMessage);
+            if (doc.getExtractionStatus() != ExtractionStatus.FAILED) return;
+            doc.setExtractionStatus(ExtractionStatus.PENDING);
+            doc.setExtractionError(null);
+            doc.setExtractionStartedAt(null);
+            doc.setExtractionFinishedAt(null);
             documentRepository.save(doc);
         });
+    }
+
+    @Transactional
+    public void timeoutStuckProcessing(Instant cutoff) {
+        List<Document> stuck = documentRepository
+                .findByExtractionStatusAndExtractionStartedAtBefore(ExtractionStatus.PROCESSING, cutoff);
+        for (Document doc : stuck) {
+            log.warn("Timing out stuck PROCESSING document {} started at {}", doc.getId(), doc.getExtractionStartedAt());
+            doc.setExtractionStatus(ExtractionStatus.FAILED);
+            doc.setExtractionError("[TIMEOUT] Extraction exceeded 15 minutes");
+            doc.setExtractionFinishedAt(Instant.now());
+            documentRepository.save(doc);
+        }
     }
 
     private void scheduleViewRefresh() {
@@ -133,7 +169,13 @@ public class DocumentService {
     }
 
     private DocumentResponse toResponse(Document d) {
-        return new DocumentResponse(d.getId(), d.getCategoryId(), d.getName(),
-                d.getMimeType(), d.getSizeBytes(), d.getUploadedBy(), d.getUploadedAt());
+        return new DocumentResponse(
+                d.getId(), d.getCategoryId(), d.getName(), d.getMimeType(),
+                d.getSizeBytes(), d.getUploadedBy(), d.getUploadedAt(),
+                d.getExtractionStatus() != null ? d.getExtractionStatus().name() : null,
+                d.getExtractionError(),
+                d.getExtractionStartedAt(),
+                d.getExtractionFinishedAt()
+        );
     }
 }

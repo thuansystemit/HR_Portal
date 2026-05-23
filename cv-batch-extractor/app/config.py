@@ -41,6 +41,19 @@ class Settings(BaseSettings):
     sanitize_max_list_item: int = 1_000
     sanitize_max_default: int = 500
 
+    # Embedding
+    embedding_enabled: bool = True
+    embedding_model: str = "all-MiniLM-L6-v2"
+
+    # Vector store (Qdrant)
+    vector_store_url: str = "http://qdrant:6333"
+    vector_store_collection: str = "documents"
+
+    # Search API
+    search_api_enabled: bool = True
+    search_api_port: int = 8001
+    search_api_host: str = "0.0.0.0"
+
     class Config:
         env_file = ".env"
 

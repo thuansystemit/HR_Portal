@@ -35,7 +35,7 @@
   />
 </app-page-layout>
 
-<!-- Document type badge (category-level, same for every row) -->
+<!-- Document type badge -->
 <ng-template #docTypeTpl>
   @if (catStore.selected()?.documentType === 'CV') {
     <span class="badge bg-info text-white">CV</span>
@@ -44,16 +44,51 @@
   }
 </ng-template>
 
+<!-- Extraction status badge -->
+<ng-template #extractionTpl let-row="row">
+  @if (asDoc(row).extractionStatus === 'PENDING') {
+    <span class="badge bg-secondary">
+      <i class="bi bi-hourglass-split me-1"></i>Pending
+    </span>
+  } @else if (asDoc(row).extractionStatus === 'PROCESSING') {
+    <span class="badge bg-warning text-dark">
+      <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Processing
+    </span>
+  } @else if (asDoc(row).extractionStatus === 'SUCCESS') {
+    <span class="badge bg-success">
+      <i class="bi bi-check-circle me-1"></i>Success
+    </span>
+  } @else if (asDoc(row).extractionStatus === 'FAILED') {
+    <span class="badge bg-danger"
+          [title]="asDoc(row).extractionError ?? 'Extraction failed'">
+      <i class="bi bi-x-circle me-1"></i>Failed
+    </span>
+  }
+</ng-template>
+
 <!-- Actions cell -->
 <ng-template #actionsTpl let-row="row">
   <div class="d-flex justify-content-center gap-2">
     @if (catStore.selected()?.documentType === 'CV') {
       <app-btn size="sm" variant="outline-info" icon="bi-person-badge" [iconOnly]="true"
-               title="View Candidate" (btnClick)="viewCandidate(row)" />
+               title="View Candidate"
+               [disabled]="!isExtractionSuccess(row)"
+               (btnClick)="viewCandidate(row)" />
+    }
+    @if (catStore.selected()?.documentType === 'INVOICE') {
+      <app-btn size="sm" variant="outline-success" icon="bi-receipt" [iconOnly]="true"
+               title="View Invoice"
+               [disabled]="!isExtractionSuccess(row)"
+               (btnClick)="viewInvoice(row)" />
+    }
+    @if ((catStore.selected()?.documentType === 'CV' || catStore.selected()?.documentType === 'INVOICE')
+         && asDoc(row).extractionStatus === 'FAILED') {
+      <app-btn size="sm" variant="outline-warning" icon="bi-arrow-clockwise" [iconOnly]="true"
+               title="Retry Extraction" (btnClick)="retryExtraction(row)" />
     }
     @if (canView()) {
       <app-btn size="sm" variant="outline-primary" icon="bi-eye" [iconOnly]="true"
-               title="View" (btnClick)="openPreview(row)" />
+               title="View" (btnClick)="openPreview(asDoc(row))" />
     }
     @if (canDeleteDoc()) {
       <app-btn size="sm" variant="outline-danger" icon="bi-trash" [iconOnly]="true"

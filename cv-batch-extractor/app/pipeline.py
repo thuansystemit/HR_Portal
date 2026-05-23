@@ -10,7 +10,10 @@ from langchain_core.exceptions import OutputParserException
 from app.backend_client import get_extraction_mode
 from app.config import settings
 from app.domain.cv_schema import CvExtraction
+from app.domain.invoice_schema import InvoiceExtraction
 from app.guardrails.base import GuardrailPipeline, GuardrailReport, PipelineContext
+from app.guardrails.input.chunker import DocumentChunkerGuard
+from app.guardrails.input.document_classifier import DocumentClassifierGuard
 from app.guardrails.input.file_size import FileSizeGuard
 from app.guardrails.input.injection import InjectionGuard
 from app.guardrails.input.liteparse_extractor import LiteParseTextExtractor
@@ -19,9 +22,14 @@ from app.guardrails.input.text_extractor import TextExtractor
 from app.guardrails.input.text_length import TextLengthGuard
 from app.guardrails.input.text_quality import TextQualityGuard
 from app.guardrails.output.confidence import ConfidenceGuard
+from app.guardrails.output.date_normalizer import DateNormalizerGuard
+from app.guardrails.output.embedder import EmbedderGuard
+from app.guardrails.output.invoice_arithmetic import InvoiceArithmeticGuard
+from app.guardrails.output.phone_normalizer import PhoneNormalizerGuard
 from app.guardrails.output.sanitize import SanitizeGuard
 from app.guardrails.output.semantic import SemanticGuard
-from app.llm_chain import invoke_extraction
+from app.guardrails.output.skill_normalizer import SkillNormalizerGuard
+from app.llm_chain import invoke_extraction, invoke_invoice_extraction
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +38,10 @@ logger = logging.getLogger(__name__)
 class ProcessingResult:
     document_id: str
     category_id: str
+    document_type: str
     status: Literal["PASS", "DEGRADED", "REJECTED", "ERROR"]
     cv_data: CvExtraction | None
+    invoice_data: InvoiceExtraction | None
     output_file: str | None
     reports: list[GuardrailReport] = field(default_factory=list)
     error: str | None = None
@@ -48,6 +58,8 @@ _INPUT_PIPELINE = GuardrailPipeline([
     TextLengthGuard(),
     TextQualityGuard(),
     InjectionGuard(),
+    DocumentClassifierGuard(),
+    DocumentChunkerGuard(),
 ])
 
 _INPUT_PIPELINE_LITE = GuardrailPipeline([
@@ -57,12 +69,19 @@ _INPUT_PIPELINE_LITE = GuardrailPipeline([
     TextLengthGuard(),
     TextQualityGuard(),
     InjectionGuard(),
+    DocumentClassifierGuard(),
+    DocumentChunkerGuard(),
 ])
 
 _OUTPUT_PIPELINE = GuardrailPipeline([
     SemanticGuard(),
+    InvoiceArithmeticGuard(),
+    PhoneNormalizerGuard(),
+    DateNormalizerGuard(),
+    SkillNormalizerGuard(),
     ConfidenceGuard(),
     SanitizeGuard(),
+    EmbedderGuard(),
 ])
 
 
@@ -84,7 +103,7 @@ def _slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
 
 
-def _build_output_filename(full_name: str | None, document_id: str) -> str:
+def _build_cv_output_filename(full_name: str | None, document_id: str) -> str:
     name = (full_name or "unknown").strip()
     parts = name.split()
     first = _slugify(parts[0]) if parts else "unknown"
@@ -94,14 +113,28 @@ def _build_output_filename(full_name: str | None, document_id: str) -> str:
     return f"cv_{slug}_{short_id}.json"
 
 
+def _build_invoice_output_filename(invoice_number: str | None, document_id: str) -> str:
+    slug = _slugify(invoice_number or "unknown")
+    short_id = document_id.replace("-", "")[:8]
+    return f"invoice_{slug}_{short_id}.json"
+
+
 def _write_json(ctx: PipelineContext) -> str | None:
-    if ctx.cv_data is None:
-        return None
-    filename = _build_output_filename(ctx.cv_data.fullName, ctx.document_id)
+    if ctx.document_type == "INVOICE":
+        if ctx.invoice_data is None:
+            return None
+        filename = _build_invoice_output_filename(ctx.invoice_data.invoiceNumber, ctx.document_id)
+        data = ctx.invoice_data.model_dump()
+    else:
+        if ctx.cv_data is None:
+            return None
+        filename = _build_cv_output_filename(ctx.cv_data.fullName, ctx.document_id)
+        data = ctx.cv_data.model_dump()
+
     output_path = Path(settings.output_dir) / filename
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
-        json.dumps(ctx.cv_data.model_dump(), ensure_ascii=False, indent=2),
+        json.dumps(data, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     logger.info("Saved extraction result to %s", output_path)
@@ -109,17 +142,24 @@ def _write_json(ctx: PipelineContext) -> str | None:
 
 
 class Pipeline:
-    def run(self, document_id: str, category_id: str, file_path: str) -> ProcessingResult:
+    def run(
+        self,
+        document_id: str,
+        category_id: str,
+        file_path: str,
+        document_type: str = "CV",
+    ) -> ProcessingResult:
         ctx = PipelineContext(
             document_id=document_id,
             category_id=category_id,
             file_path=file_path,
+            document_type=document_type,
         )
         try:
             use_llm = get_extraction_mode(category_id)
             logger.info(
-                "Document %s  category=%s  mode=%s",
-                document_id, category_id, "LLM" if use_llm else "LiteParse+LLM",
+                "Document %s  type=%s  category=%s  mode=%s",
+                document_id, document_type, category_id, "LLM" if use_llm else "LiteParse+LLM",
             )
 
             input_pipeline = _INPUT_PIPELINE if use_llm else _INPUT_PIPELINE_LITE
@@ -127,8 +167,13 @@ class Pipeline:
 
             if not _is_blocked(ctx.reports):
                 try:
-                    ctx.cv_data = invoke_extraction(ctx.prompt_text or ctx.raw_text or "")
-                    ctx.raw_dict = ctx.cv_data.model_dump()
+                    text = ctx.prompt_text or ctx.raw_text or ""
+                    if document_type == "INVOICE":
+                        ctx.invoice_data = invoke_invoice_extraction(text)
+                        ctx.raw_dict = ctx.invoice_data.model_dump()
+                    else:
+                        ctx.cv_data = invoke_extraction(text)
+                        ctx.raw_dict = ctx.cv_data.model_dump()
                 except OutputParserException as exc:
                     logger.error(
                         "Document %s: LLM output could not be parsed after self-correction: %s",
@@ -156,8 +201,10 @@ class Pipeline:
             return ProcessingResult(
                 document_id=document_id,
                 category_id=category_id,
+                document_type=document_type,
                 status=status,
                 cv_data=ctx.cv_data,
+                invoice_data=ctx.invoice_data,
                 output_file=output_file,
                 reports=ctx.reports,
             )
@@ -166,8 +213,10 @@ class Pipeline:
             return ProcessingResult(
                 document_id=document_id,
                 category_id=category_id,
+                document_type=document_type,
                 status="ERROR",
                 cv_data=None,
+                invoice_data=None,
                 output_file=None,
                 reports=ctx.reports,
                 error=str(exc),

@@ -5,7 +5,19 @@ pytesseract>=0.3.13
 pillow>=10.0.0
 python-docx>=1.1.0
 python-magic>=0.4.27
+phonenumbers>=8.13.0
+rapidfuzz>=3.0.0
 
 # LangChain
 langchain-core>=0.3.0
 langchain-ollama>=0.2.0
+
+# Embedding + Vector DB  (CPU-only torch keeps image ~300 MB vs ~2 GB with CUDA)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.2.0
+sentence-transformers>=3.0.0
+qdrant-client>=1.9.0
+
+# Search API
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0

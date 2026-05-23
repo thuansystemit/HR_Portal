@@ -36,7 +36,7 @@ public class CvCandidate {
     @Column(length = 320)
     private String email;
 
-    @Column(length = 20)
+    @Column(length = 30)
     private String phone;
 
     @Column(length = 200)

@@ -1,5 +1,7 @@
 export type DocumentType = 'CV' | 'INVOICE';
 
+export type ExtractionStatus = 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED';
+
 export const DOCUMENT_TYPE_OPTIONS: { value: DocumentType; label: string }[] = [
   { value: 'CV',      label: 'CV'      },
   { value: 'INVOICE', label: 'Invoice' },
@@ -34,13 +36,17 @@ export interface DocumentCategoryDto {
 }
 
 export interface AppDocument {
-  id:         string;
-  categoryId: string;
-  name:       string;
-  mimeType:   string;
-  fileSize:   number;   // sizeBytes
-  uploadedBy: string;   // UUID
-  createdAt:  string;   // uploadedAt
+  id:                   string;
+  categoryId:           string;
+  name:                 string;
+  mimeType:             string;
+  fileSize:             number;
+  uploadedBy:           string;
+  createdAt:            string;
+  extractionStatus:     ExtractionStatus | null;
+  extractionError:      string | null;
+  extractionStartedAt:  string | null;
+  extractionFinishedAt: string | null;
 }
 
 export interface AppDocumentDto {

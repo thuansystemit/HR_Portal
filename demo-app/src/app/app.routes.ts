@@ -52,6 +52,11 @@ export const routes: Routes = [
           import('./features/cv-candidates/cv-candidates.routes').then(m => m.CV_CANDIDATES_ROUTES),
       },
       {
+        path: 'invoice-records',
+        loadChildren: () =>
+          import('./features/invoice-records/invoice-records.routes').then(m => m.INVOICE_RECORDS_ROUTES),
+      },
+      {
         path: 'profile',
         loadChildren: () =>
           import('./features/profile/profile-routes.routes').then(m => m.PROFILE_ROUTES),

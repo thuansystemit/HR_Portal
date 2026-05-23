@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Component
 @Slf4j
@@ -80,7 +81,7 @@ public class CvExtractionResultMapper {
                 toShort(e.startYear()),
                 toShort(e.endYear()),
                 e.gpa(),
-                e.honors()
+                e.honors() != null ? String.join(", ", e.honors()) : null
         )).toList();
     }
 

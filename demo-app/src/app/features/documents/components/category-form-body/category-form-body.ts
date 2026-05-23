@@ -39,6 +39,11 @@ export class CategoryFormBody implements OnInit, OnDestroy, DialogFormBody {
     return this.form.get('documentType')?.value === 'CV';
   }
 
+  protected get isExtractableType(): boolean {
+    const t = this.form.get('documentType')?.value;
+    return t === 'CV' || t === 'INVOICE';
+  }
+
   protected get permArray(): FormArray { return this.form.get('permissions') as FormArray; }
 
   constructor() {
@@ -113,7 +118,9 @@ export class CategoryFormBody implements OnInit, OnDestroy, DialogFormBody {
       name:          raw.name!,
       description:   raw.description ?? '',
       documentType:  raw.documentType as DocumentType,
-      llmExtraction: raw.documentType === 'CV' ? (raw.llmExtraction ?? true) : true,
+      llmExtraction: (raw.documentType === 'CV' || raw.documentType === 'INVOICE')
+        ? (raw.llmExtraction ?? true)
+        : true,
       permissions:   raw.permissions as CategoryRolePermission[],
     };
 

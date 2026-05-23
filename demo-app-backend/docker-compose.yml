@@ -56,10 +56,25 @@ services:
       retries: 12
       start_period: 60s
 
+  qdrant:
+    image: qdrant/qdrant:v1.9.4
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   cv-extractor:
     build: ../cv-batch-extractor
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    ports:
+      - "8001:8001"
     environment:
       UPLOAD_DIR: /app/uploads
       OUTPUT_DIR: /app/output
@@ -67,11 +82,16 @@ services:
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-cv-extractor-secret}
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3}
+      VECTOR_STORE_URL: http://qdrant:6333
+      VECTOR_STORE_COLLECTION: documents
+      EMBEDDING_MODEL: all-MiniLM-L6-v2
     volumes:
       - uploads_data:/app/uploads
       - cv_output_data:/app/output
     depends_on:
       app:
+        condition: service_healthy
+      qdrant:
         condition: service_healthy
     restart: on-failure
 
@@ -79,3 +99,4 @@ volumes:
   postgres_data:
   uploads_data:
   cv_output_data:
+  qdrant_data:

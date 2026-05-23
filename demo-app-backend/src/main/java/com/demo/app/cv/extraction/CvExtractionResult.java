@@ -56,7 +56,7 @@ public record CvExtractionResult(
             Integer startYear,
             Integer endYear,
             BigDecimal gpa,
-            String honors
+            List<String> honors
     ) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)

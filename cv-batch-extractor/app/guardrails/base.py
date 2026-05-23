@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
 from app.domain.cv_schema import CvExtraction
+from app.domain.invoice_schema import InvoiceExtraction
+
+if TYPE_CHECKING:
+    from app.chunking import Chunk
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +26,14 @@ class PipelineContext:
     document_id: str
     category_id: str
     file_path: str
+    document_type: str = "CV"
     raw_text: str | None = None
     prompt_text: str | None = None
     llm_raw: str | None = None
     raw_dict: dict | None = None
     cv_data: CvExtraction | None = None
+    invoice_data: InvoiceExtraction | None = None
+    chunks: list[Chunk] = field(default_factory=list)
     reports: list[GuardrailReport] = field(default_factory=list)
 
 

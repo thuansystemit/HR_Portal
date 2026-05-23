@@ -1,5 +1,6 @@
 package com.demo.app.cv.service;
 
+import com.demo.app.content.entity.ExtractionStatus;
 import com.demo.app.content.service.DocumentService;
 import com.demo.app.cv.dto.CreateCvCandidateRequest;
 import com.demo.app.cv.dto.CvCandidateResponse;
@@ -52,10 +53,10 @@ public class CvCandidateService {
             CreateCvCandidateRequest createRequest = resultMapper.toRequest(
                     result, request.documentId(), request.documentCategoryId());
             CvCandidateResponse response = create(createRequest);
-            documentService.updateExtractionStatus(request.documentId(), "COMPLETED");
+            documentService.updateExtractionStatus(request.documentId(), ExtractionStatus.SUCCESS);
             return response;
         } catch (IOException e) {
-            documentService.updateExtractionStatus(request.documentId(), "FAILED",
+            documentService.updateExtractionStatus(request.documentId(), ExtractionStatus.FAILED,
                     "JSON_READ", e.getMessage());
             throw new RuntimeException("Failed to read extraction result: " + request.jsonFile(), e);
         }
