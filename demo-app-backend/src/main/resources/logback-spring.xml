@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="30 seconds">
+
+    <!-- ============================================================= -->
+    <!-- Properties                                                     -->
+    <!-- ============================================================= -->
+    <springProperty scope="context" name="APP_NAME" source="spring.application.name"
+                    defaultValue="demo-app-backend"/>
+    <property name="LOGSTASH_HOST" value="${LOGSTASH_HOST:-logstash}"/>
+    <property name="LOGSTASH_PORT" value="${LOGSTASH_PORT:-5000}"/>
+
+    <!-- ============================================================= -->
+    <!-- CONSOLE Appender (human-readable, for development)             -->
+    <!-- ============================================================= -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>
+                %d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) - %msg | requestId=%X{requestId} userId=%X{userId} method=%X{method} path=%X{path} clientIp=%X{clientIp} status=%X{statusCode} duration=%X{durationMs}ms%n
+            </pattern>
+        </encoder>
+    </appender>
+
+    <!-- ============================================================= -->
+    <!-- LOGSTASH Appender (JSON, for production ELK stack)             -->
+    <!-- Uses logstash-logback-encoder to produce structured JSON       -->
+    <!-- and sends it over TCP to Logstash.                             -->
+    <!-- ============================================================= -->
+    <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+        <destination>${LOGSTASH_HOST}:${LOGSTASH_PORT}</destination>
+
+        <!-- Reconnect if Logstash is temporarily unavailable -->
+        <reconnectionDelay>5 seconds</reconnectionDelay>
+
+        <!-- Ring buffer to prevent blocking the application thread -->
+        <ringBufferSize>16384</ringBufferSize>
+
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <!-- Include all MDC fields automatically -->
+            <includeMdcKeyName>requestId</includeMdcKeyName>
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>userId</includeMdcKeyName>
+            <includeMdcKeyName>roleId</includeMdcKeyName>
+            <includeMdcKeyName>method</includeMdcKeyName>
+            <includeMdcKeyName>path</includeMdcKeyName>
+            <includeMdcKeyName>clientIp</includeMdcKeyName>
+            <includeMdcKeyName>statusCode</includeMdcKeyName>
+            <includeMdcKeyName>durationMs</includeMdcKeyName>
+
+            <!-- Add static fields -->
+            <customFields>{"application":"${APP_NAME}"}</customFields>
+
+            <!-- Include stack traces for exceptions -->
+            <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                <maxDepthPerThrowable>30</maxDepthPerThrowable>
+                <maxLength>2048</maxLength>
+                <shortenedClassNameLength>20</shortenedClassNameLength>
+                <rootCauseFirst>true</rootCauseFirst>
+            </throwableConverter>
+        </encoder>
+    </appender>
+
+    <!-- ============================================================= -->
+    <!-- JSON_CONSOLE Appender (structured JSON to stdout, for          -->
+    <!-- container environments without Logstash TCP connectivity)      -->
+    <!-- ============================================================= -->
+    <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdcKeyName>requestId</includeMdcKeyName>
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>userId</includeMdcKeyName>
+            <includeMdcKeyName>roleId</includeMdcKeyName>
+            <includeMdcKeyName>method</includeMdcKeyName>
+            <includeMdcKeyName>path</includeMdcKeyName>
+            <includeMdcKeyName>clientIp</includeMdcKeyName>
+            <includeMdcKeyName>statusCode</includeMdcKeyName>
+            <includeMdcKeyName>durationMs</includeMdcKeyName>
+            <customFields>{"application":"${APP_NAME}"}</customFields>
+            <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                <maxDepthPerThrowable>30</maxDepthPerThrowable>
+                <maxLength>2048</maxLength>
+                <shortenedClassNameLength>20</shortenedClassNameLength>
+                <rootCauseFirst>true</rootCauseFirst>
+            </throwableConverter>
+        </encoder>
+    </appender>
+
+    <!-- ============================================================= -->
+    <!-- Profile-specific configuration                                 -->
+    <!-- ============================================================= -->
+
+    <!-- DEV profile: human-readable console output -->
+    <springProfile name="dev">
+        <logger name="com.demo" level="DEBUG" additivity="false">
+            <appender-ref ref="CONSOLE"/>
+        </logger>
+        <logger name="org.springframework.security" level="DEBUG"/>
+        <logger name="org.hibernate.SQL" level="DEBUG"/>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <!-- PROD profile: structured JSON to Logstash TCP + JSON to stdout -->
+    <springProfile name="prod">
+        <logger name="com.demo" level="INFO" additivity="false">
+            <appender-ref ref="LOGSTASH"/>
+            <appender-ref ref="JSON_CONSOLE"/>
+        </logger>
+        <logger name="org.springframework.security" level="WARN"/>
+        <logger name="org.hibernate.SQL" level="WARN"/>
+        <logger name="org.hibernate.type.descriptor.sql" level="WARN"/>
+
+        <root level="WARN">
+            <appender-ref ref="LOGSTASH"/>
+            <appender-ref ref="JSON_CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <!-- DEFAULT (no profile active): console output like dev -->
+    <springProfile name="default">
+        <logger name="com.demo" level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE"/>
+        </logger>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+</configuration>

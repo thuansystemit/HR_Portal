@@ -23,6 +23,10 @@ public class CvCandidateController {
     public ResponseEntity<CvCandidateResponse> ingest(
             @RequestBody @Valid IngestCvRequest request) {
         var created = cvCandidateService.ingest(request);
+        if (created == null) {
+            // REJECTED or ERROR — document status already set to FAILED, no candidate to return
+            return ResponseEntity.ok().build();
+        }
         return ResponseEntity
                 .created(URI.create("/api/v1/cv-candidates/" + created.id()))
                 .body(created);

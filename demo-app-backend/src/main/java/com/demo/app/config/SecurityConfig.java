@@ -2,6 +2,7 @@ package com.demo.app.config;
 
 import com.demo.app.iam.security.InternalApiKeyFilter;
 import com.demo.app.iam.security.JwtCookieAuthFilter;
+import com.demo.app.platform.logging.MdcUserFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,6 +15,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
 
@@ -26,6 +28,7 @@ public class SecurityConfig {
     private final JwtCookieAuthFilter jwtCookieAuthFilter;
     private final InternalApiKeyFilter internalApiKeyFilter;
     private final CorsConfigurationSource corsConfigurationSource;
+    private final MdcUserFilter mdcUserFilter;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -40,7 +43,8 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .addFilterBefore(internalApiKeyFilter, UsernamePasswordAuthenticationFilter.class)
-            .addFilterBefore(jwtCookieAuthFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtCookieAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(mdcUserFilter, AuthorizationFilter.class);
         return http.build();
     }
 

@@ -1,8 +1,26 @@
+# ── core runtime ───────────────────────────────────────────────────────────
 watchdog>=4.0.0
+pydantic>=2.0.0
 pydantic-settings>=2.0.0
 requests>=2.31.0
+
+# ── document parsing (built-in OCR path) ───────────────────────────────────
 pymupdf>=1.24.0
-pytesseract>=0.3.13
-pillow>=10.0.0
 python-docx>=1.1.0
-python-magic>=0.4.27
+pillow>=10.0.0
+pytesseract>=0.3.13       # requires system: apt-get install tesseract-ocr
+
+# ── file type detection ─────────────────────────────────────────────────────
+python-magic>=0.4.27      # requires system: apt-get install libmagic1
+
+# ── optional: OCR engines (install the one matching OCR_ENGINE setting) ─────
+# paddleocr>=2.7.0        # OCR_ENGINE=paddleocr  →  pip install paddleocr paddlepaddle
+# opencv-python>=4.9.0    # required by paddleocr + preprocessing (deskew/denoise)
+# numpy>=1.26.0           # required by paddleocr + opencv
+
+# ── optional: LLM providers (install matching LLM_PROVIDER setting) ─────────
+# openai>=1.30.0          # LLM_PROVIDER=openai or azure_openai
+# anthropic>=0.26.0       # LLM_PROVIDER=anthropic
+
+# ── optional: preprocessing ─────────────────────────────────────────────────
+# opencv-python>=4.9.0    # image enhancement, deskew, denoise

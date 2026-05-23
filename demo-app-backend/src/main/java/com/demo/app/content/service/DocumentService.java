@@ -7,6 +7,7 @@ import com.demo.app.content.entity.DocumentType;
 import com.demo.app.content.repository.DocumentCategoryRepository;
 import com.demo.app.content.repository.DocumentRepository;
 import com.demo.app.iam.dto.PagedResponse;
+import com.demo.app.iam.repository.UserRepository;
 import com.demo.app.insights.service.ReportService;
 import com.demo.app.platform.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class DocumentService {
     private final DocumentCategoryRepository categoryRepository;
     private final StorageService storageService;
     private final ReportService reportService;
+    private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public PagedResponse<DocumentResponse> list(UUID categoryId, int page, int size) {
@@ -133,7 +135,11 @@ public class DocumentService {
     }
 
     private DocumentResponse toResponse(Document d) {
+        String uploadedByName = userRepository.findByIdAndDeletedAtIsNull(d.getUploadedBy())
+                .map(u -> u.getFullName())
+                .orElse("Unknown");
         return new DocumentResponse(d.getId(), d.getCategoryId(), d.getName(),
-                d.getMimeType(), d.getSizeBytes(), d.getUploadedBy(), d.getUploadedAt());
+                d.getMimeType(), d.getSizeBytes(), d.getUploadedBy(), uploadedByName,
+                d.getUploadedAt(), d.getExtractionStatus());
     }
 }

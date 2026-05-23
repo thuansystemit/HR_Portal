@@ -17,6 +17,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -42,6 +43,8 @@ public class JwtCookieAuthFilter extends OncePerRequestFilter {
                         .map(p -> new SimpleGrantedAuthority("PERM_" + p))
                         .collect(Collectors.toList());
                 var auth = new UsernamePasswordAuthenticationToken(userId, null, authorities);
+                var roleId = claims.get("roleId", String.class);
+                auth.setDetails(Map.of("roleId", roleId != null ? roleId : "NONE"));
                 SecurityContextHolder.getContext().setAuthentication(auth);
             } catch (Exception e) {
                 log.debug("JWT validation failed: {}", e.getMessage());

@@ -1,0 +1,24 @@
+<div class="session-warning">
+  <p class="mb-3">
+    You have been inactive for a while. Your session will expire in
+    <strong>{{ formatted() }}</strong>.
+    Click <em>Stay Logged In</em> to continue.
+  </p>
+
+  <div class="progress" role="progressbar"
+       [attr.aria-valuenow]="progressPct()"
+       aria-valuemin="0"
+       aria-valuemax="100"
+       aria-label="Time remaining before automatic logout">
+    <div
+      class="progress-bar progress-bar-striped progress-bar-animated"
+      [class.bg-warning]="progressPct() > 30"
+      [class.bg-danger]="progressPct() <= 30"
+      [style.width.%]="progressPct()">
+    </div>
+  </div>
+
+  <p class="text-muted small mt-2 mb-0">
+    You will be logged out automatically when the timer reaches 00:00.
+  </p>
+</div>

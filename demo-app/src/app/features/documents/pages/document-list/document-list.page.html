@@ -44,12 +44,27 @@
   }
 </ng-template>
 
+<!-- Extraction status badge -->
+<ng-template #extractionTpl let-row="row">
+  @let badge = extractionBadge(row.extractionStatus);
+  @if (badge.label) {
+    <span class="badge {{ badge.css }}">
+      @if (row.extractionStatus === 'PROCESSING') {
+        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+      }
+      {{ badge.label }}
+    </span>
+  }
+</ng-template>
+
 <!-- Actions cell -->
 <ng-template #actionsTpl let-row="row">
   <div class="d-flex justify-content-center gap-2">
     @if (catStore.selected()?.documentType === 'CV') {
       <app-btn size="sm" variant="outline-info" icon="bi-person-badge" [iconOnly]="true"
-               title="View Candidate" (btnClick)="viewCandidate(row)" />
+               title="View Candidate"
+               [disabled]="!canViewCandidate(row)"
+               (btnClick)="viewCandidate(row)" />
     }
     @if (canView()) {
       <app-btn size="sm" variant="outline-primary" icon="bi-eye" [iconOnly]="true"

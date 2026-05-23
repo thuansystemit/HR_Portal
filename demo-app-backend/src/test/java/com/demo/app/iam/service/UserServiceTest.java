@@ -133,4 +133,91 @@ class UserServiceTest {
         assertThat(result.content()).hasSize(1);
         assertThat(result.totalElements()).isEqualTo(1);
     }
+
+    // Task 3.2 -- additional coverage for update
+
+    @Test
+    void update_succeeds_whenRoleChanged() {
+        var user = User.builder().id(USER_ID).fullName("Old Name").email("t@t.com")
+                .status("active").createdAt(Instant.now()).build();
+        var newRoleId = UUID.randomUUID();
+        var role = Role.builder().id(newRoleId).name("Manager").build();
+        var req = new UpdateUserRequest("New Name", newRoleId, "active");
+
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
+        when(roleRepository.findById(newRoleId)).thenReturn(Optional.of(role));
+        when(userRepository.save(any())).thenReturn(user);
+        // Existing role assignment is different from newRoleId, so role is changed
+        when(userRoleRepository.findByUserIdAndRoleId(USER_ID, newRoleId)).thenReturn(Optional.empty());
+        when(userRoleRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(userRoleRepository.findByUserId(USER_ID)).thenReturn(
+                List.of(UserRole.builder().userId(USER_ID).roleId(newRoleId).build()));
+        when(roleRepository.findById(newRoleId)).thenReturn(Optional.of(role));
+
+        var result = userService.update(USER_ID, req);
+
+        assertThat(result.fullName()).isEqualTo("New Name");
+        verify(userRoleRepository).deleteByUserId(USER_ID);
+        verify(permissionCacheService).evict(USER_ID);
+    }
+
+    @Test
+    void update_succeeds_whenRoleSame() {
+        var user = User.builder().id(USER_ID).fullName("Test").email("t@t.com")
+                .status("active").createdAt(Instant.now()).build();
+        var role = Role.builder().id(ROLE_ID).name("Viewer").build();
+        var req = new UpdateUserRequest("Test Updated", ROLE_ID, "active");
+        var existingAssignment = UserRole.builder().userId(USER_ID).roleId(ROLE_ID).build();
+
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
+        when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
+        when(userRepository.save(any())).thenReturn(user);
+        // Role assignment already exists -- no change needed
+        when(userRoleRepository.findByUserIdAndRoleId(USER_ID, ROLE_ID)).thenReturn(Optional.of(existingAssignment));
+        when(userRoleRepository.findByUserId(USER_ID)).thenReturn(List.of(existingAssignment));
+
+        userService.update(USER_ID, req);
+
+        verify(userRoleRepository, never()).deleteByUserId(any());
+        verify(permissionCacheService, never()).evict(any());
+    }
+
+    @Test
+    void update_throws_whenNotFound() {
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.update(USER_ID, new UpdateUserRequest("Name", ROLE_ID, "active")))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void create_defaultsStatusToActive_whenStatusNull() {
+        var req = new CreateUserRequest("Test User", "default@t.com", ROLE_ID, "pass123", null);
+        var user = User.builder().id(USER_ID).fullName("Test User").email("default@t.com")
+                .status("active").createdAt(Instant.now()).build();
+        var role = Role.builder().id(ROLE_ID).name("Viewer").build();
+
+        when(userRepository.existsByEmailIgnoreCaseAndDeletedAtIsNull("default@t.com")).thenReturn(false);
+        when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
+        when(userRepository.save(any())).thenReturn(user);
+        when(credentialRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(userRoleRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(userRoleRepository.findByUserId(USER_ID)).thenReturn(List.of());
+        when(passwordEncoder.encode("pass123")).thenReturn("$encoded");
+
+        var result = userService.create(req);
+
+        assertThat(result.status()).isEqualTo("active");
+    }
+
+    @Test
+    void update_throws_whenRoleNotFound() {
+        var user = User.builder().id(USER_ID).fullName("Test").email("t@t.com")
+                .status("active").createdAt(Instant.now()).build();
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
+        when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.update(USER_ID, new UpdateUserRequest("Name", ROLE_ID, "active")))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
 }

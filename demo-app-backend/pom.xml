@@ -134,6 +134,12 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Logstash Logback Encoder — structured JSON logging for ELK -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>7.4</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -176,16 +182,75 @@
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>0.8.12</version>
                 <executions>
+                    <!-- 1. Instrument classes for coverage data collection -->
                     <execution>
                         <id>prepare-agent</id>
-                        <goals><goal>prepare-agent</goal></goals>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
                     </execution>
+
+                    <!-- 2. Generate HTML + XML + CSV reports after tests run -->
                     <execution>
                         <id>report</id>
                         <phase>verify</phase>
-                        <goals><goal>report</goal></goals>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+
+                    <!-- 3. Enforce coverage thresholds: fail build if not met -->
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.95</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.95</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                            <excludes>
+                                <exclude>com/demo/app/DemoAppApplication.class</exclude>
+                                <exclude>com/demo/app/config/**</exclude>
+                                <exclude>**/dto/**</exclude>
+                                <exclude>**/entity/**</exclude>
+                                <exclude>**/exception/**</exclude>
+                                <exclude>**/*MapperImpl.class</exclude>
+                                <exclude>**/repository/**</exclude>
+                                <!-- MDC/logging infrastructure — no business logic to cover -->
+                                <exclude>**/platform/logging/**</exclude>
+                            </excludes>
+                        </configuration>
                     </execution>
                 </executions>
+                <configuration>
+                    <excludes>
+                        <exclude>com/demo/app/DemoAppApplication.class</exclude>
+                        <exclude>com/demo/app/config/**</exclude>
+                        <exclude>**/dto/**</exclude>
+                        <exclude>**/entity/**</exclude>
+                        <exclude>**/exception/**</exclude>
+                        <exclude>**/*MapperImpl.class</exclude>
+                        <exclude>**/repository/**</exclude>
+                        <!-- MDC/logging infrastructure — no business logic to cover -->
+                        <exclude>**/platform/logging/**</exclude>
+                    </excludes>
+                </configuration>
             </plugin>
         </plugins>
     </build>

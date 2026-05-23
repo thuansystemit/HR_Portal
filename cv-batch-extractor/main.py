@@ -1,17 +1,13 @@
-import logging
+from monitoring.logging.setup import configure as configure_logging
 
-from app.watcher import start
-from app.worker import WorkerPool
+configure_logging(level="INFO", fmt="text")
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
-    datefmt="%Y-%m-%dT%H:%M:%S",
-)
+from workflow.orchestration import WorkerPool
+from ingestion.file_watcher.watcher import start as start_watcher
 
 if __name__ == "__main__":
     pool = WorkerPool()
     try:
-        start(pool)
+        start_watcher(pool.submit)
     finally:
         pool.shutdown()

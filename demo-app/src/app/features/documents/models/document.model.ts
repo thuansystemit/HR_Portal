@@ -33,14 +33,18 @@ export interface DocumentCategoryDto {
   llmExtraction: boolean;
 }
 
+export type ExtractionStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+
 export interface AppDocument {
-  id:         string;
-  categoryId: string;
-  name:       string;
-  mimeType:   string;
-  fileSize:   number;   // sizeBytes
-  uploadedBy: string;   // UUID
-  createdAt:  string;   // uploadedAt
+  id:               string;
+  categoryId:       string;
+  name:             string;
+  mimeType:         string;
+  fileSize:         number;   // sizeBytes
+  uploadedBy:       string;   // UUID
+  uploadedByName:   string;
+  createdAt:        string;   // uploadedAt
+  extractionStatus: ExtractionStatus | null;
 }
 
 export interface AppDocumentDto {

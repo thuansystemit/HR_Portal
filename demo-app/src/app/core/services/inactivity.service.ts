@@ -2,10 +2,12 @@ import { Injectable, NgZone, inject, OnDestroy } from '@angular/core';
 import { fromEvent, merge, Subscription } from 'rxjs';
 import { throttleTime } from 'rxjs/operators';
 import { AuthService } from '../../auth/services/auth';
-import { DialogService } from '../../shared/components/dialog/dialog.service';
+import { DialogRef, DialogService } from '../../shared/components/dialog/dialog.service';
+import { SessionWarningComponent } from '../components/session-warning/session-warning.component';
 
-const TIMEOUT_MS     = 15 * 60 * 1000;  // 15 minutes
-const WARN_BEFORE_MS =  1 * 60 * 1000;  // warn 1 minute before
+const TIMEOUT_MS     = 15 * 60 * 1000;  // 15 minutes total
+const WARN_BEFORE_MS =  1 * 60 * 1000;  // warn 1 minute before logout
+const WARN_SECONDS   = WARN_BEFORE_MS / 1000;
 
 const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
 
@@ -15,10 +17,10 @@ export class InactivityService implements OnDestroy {
   private readonly dialog = inject(DialogService);
   private readonly zone   = inject(NgZone);
 
-  private warnHandle?:   ReturnType<typeof setTimeout>;
-  private logoutHandle?: ReturnType<typeof setTimeout>;
-  private warnOpen  = false;
-  private actSub?:  Subscription;
+  private warnHandle?:    ReturnType<typeof setTimeout>;
+  private logoutHandle?:  ReturnType<typeof setTimeout>;
+  private warnDialogRef?: DialogRef;
+  private actSub?:        Subscription;
 
   start(): void {
     this.zone.runOutsideAngular(() => {
@@ -26,23 +28,24 @@ export class InactivityService implements OnDestroy {
         ...ACTIVITY_EVENTS.map(e => fromEvent(document, e)),
       ).pipe(throttleTime(500));
 
-      this.actSub = activity$.subscribe(() => this.onActivity());
+      this.actSub = activity$.subscribe(() => this.zone.run(() => this.onActivity()));
     });
 
     this.schedule();
   }
 
   stop(): void {
+    this.warnDialogRef?.dismiss();
+    this.warnDialogRef = undefined;
     this.clearTimers();
     this.actSub?.unsubscribe();
     this.actSub = undefined;
-    this.warnOpen = false;
   }
 
   ngOnDestroy(): void { this.stop(); }
 
   private onActivity(): void {
-    if (this.warnOpen) return;   // don't reset while warning is visible
+    if (this.warnDialogRef) return;   // don't reset while warning is visible
     this.schedule();
   }
 
@@ -54,28 +57,44 @@ export class InactivityService implements OnDestroy {
     }, TIMEOUT_MS - WARN_BEFORE_MS);
 
     this.logoutHandle = setTimeout(() => {
-      this.zone.run(() => this.auth.logout());
+      this.zone.run(() => {
+        // Dismiss the warning dialog before navigating away so it doesn't
+        // remain visible on top of the login page.
+        this.warnDialogRef?.dismiss();
+        this.warnDialogRef = undefined;
+        this.auth.logout();
+      });
     }, TIMEOUT_MS);
   }
 
   private clearTimers(): void {
     clearTimeout(this.warnHandle);
     clearTimeout(this.logoutHandle);
+    this.warnHandle   = undefined;
+    this.logoutHandle = undefined;
   }
 
   private showWarning(): void {
-    if (this.warnOpen) return;
-    this.warnOpen = true;
+    if (this.warnDialogRef) return;
 
-    this.dialog.confirm(
-      'Session Expiring Soon',
-      'You have been inactive for 14 minutes. Your session will expire in 1 minute. Do you want to stay logged in?',
-      { confirmLabel: 'Stay Logged In', cancelLabel: 'Log Out', type: 'warning' },
-    ).then(stayIn => {
-      this.warnOpen = false;
+    this.warnDialogRef = this.dialog.openForm(
+      SessionWarningComponent,
+      {
+        title:         'Session Expiring Soon',
+        type:          'warning',
+        confirmLabel:  'Stay Logged In',
+        cancelLabel:   'Log Out',
+      },
+      { secondsLeft: WARN_SECONDS },
+    );
+
+    this.warnDialogRef.result.then(stayIn => {
+      this.warnDialogRef = undefined;
       if (stayIn) {
-        this.schedule();   // reset the full 15-minute timer
+        // User chose to stay — reset the full 15-minute timer.
+        this.schedule();
       } else {
+        // User chose to log out immediately.
         this.clearTimers();
         this.auth.logout();
       }

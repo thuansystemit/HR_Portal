@@ -138,4 +138,107 @@ class DocumentCategoryServiceTest {
         assertThatThrownBy(() -> categoryService.findById(CAT_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
+
+    @Test
+    void listForRole_returnsAll_whenRoleIdIsNull() {
+        var cat = DocumentCategory.builder().id(CAT_ID).name("Contracts")
+                .documentType(DocumentType.INVOICE).documentCount(0).createdAt(Instant.now()).build();
+
+        when(categoryRepository.findAllActive()).thenReturn(List.of(cat));
+        when(visibilityRepository.findByCategoryId(CAT_ID)).thenReturn(List.of());
+
+        var result = categoryService.listForRole(null);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).name()).isEqualTo("Contracts");
+    }
+
+    @Test
+    void create_setsLlmExtractionFalse_whenExplicitlyFalse() {
+        var req = new CreateCategoryRequest("NewCat", "desc", DocumentType.CV, false, null);
+        var cat = DocumentCategory.builder().id(CAT_ID).name("NewCat")
+                .documentType(DocumentType.CV).documentCount(0).createdAt(Instant.now())
+                .llmExtraction(false).build();
+
+        when(categoryRepository.existsByNameIgnoreCaseAndDeletedAtIsNull("NewCat")).thenReturn(false);
+        when(categoryRepository.save(any())).thenReturn(cat);
+        when(visibilityRepository.findByCategoryId(CAT_ID)).thenReturn(List.of());
+
+        var result = categoryService.create(req);
+
+        assertThat(result.llmExtraction()).isFalse();
+    }
+
+    @Test
+    void update_noLlmExtractionChange_whenRequestLlmExtractionIsNull() {
+        var cat = DocumentCategory.builder().id(CAT_ID).name("HR Docs")
+                .documentType(DocumentType.INVOICE).documentCount(0).createdAt(Instant.now())
+                .llmExtraction(true).build();
+        var req = new UpdateCategoryRequest("HR Docs", "Updated", DocumentType.INVOICE, null, null);
+
+        when(categoryRepository.findByIdAndDeletedAtIsNull(CAT_ID)).thenReturn(Optional.of(cat));
+        when(categoryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(visibilityRepository.findByCategoryId(CAT_ID)).thenReturn(List.of());
+
+        var result = categoryService.update(CAT_ID, req);
+
+        // llmExtraction should remain true since request.llmExtraction() is null
+        assertThat(cat.isLlmExtraction()).isTrue();
+    }
+
+    @Test
+    void create_savesPermissions_whenPermissionsProvided() {
+        var roleId = UUID.randomUUID();
+        var permEntry = new CreateCategoryRequest.PermissionEntry(roleId, true, false, false);
+        var req = new CreateCategoryRequest("WithPerms", "desc", DocumentType.INVOICE, null, List.of(permEntry));
+        var cat = DocumentCategory.builder().id(CAT_ID).name("WithPerms")
+                .documentType(DocumentType.INVOICE).documentCount(0).createdAt(Instant.now()).build();
+
+        when(categoryRepository.existsByNameIgnoreCaseAndDeletedAtIsNull("WithPerms")).thenReturn(false);
+        when(categoryRepository.save(any())).thenReturn(cat);
+        when(visibilityRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(visibilityRepository.findByCategoryId(CAT_ID)).thenReturn(List.of());
+
+        var result = categoryService.create(req);
+
+        verify(visibilityRepository).save(any());
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    void update_savesPermissions_whenPermissionsProvided() {
+        var roleId = UUID.randomUUID();
+        var permEntry = new UpdateCategoryRequest.PermissionEntry(roleId, true, true, false);
+        var req = new UpdateCategoryRequest("HR Docs", "Updated", DocumentType.INVOICE, null, List.of(permEntry));
+        var cat = DocumentCategory.builder().id(CAT_ID).name("HR Docs")
+                .documentType(DocumentType.INVOICE).documentCount(0).createdAt(Instant.now()).build();
+
+        when(categoryRepository.findByIdAndDeletedAtIsNull(CAT_ID)).thenReturn(Optional.of(cat));
+        when(categoryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(visibilityRepository.findByCategoryIdAndRoleId(CAT_ID, roleId)).thenReturn(Optional.empty());
+        when(visibilityRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(visibilityRepository.findByCategoryId(CAT_ID)).thenReturn(List.of());
+
+        var result = categoryService.update(CAT_ID, req);
+
+        verify(visibilityRepository).save(any());
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    void delete_throws_whenNotFound() {
+        when(categoryRepository.findByIdAndDeletedAtIsNull(CAT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> categoryService.delete(CAT_ID))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void update_throws_whenNotFound() {
+        when(categoryRepository.findByIdAndDeletedAtIsNull(CAT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> categoryService.update(CAT_ID,
+                new UpdateCategoryRequest("X", "X", DocumentType.CV, null, null)))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
 }

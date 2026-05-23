@@ -39,11 +39,19 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,loggers
   endpoint:
     health:
       probes:
         enabled: true
+    loggers:
+      enabled: true
+
+logging:
+  level:
+    com.demo: INFO
+    org.springframework.security: WARN
+    net.logstash.logback: WARN
 
 app:
   jwt:

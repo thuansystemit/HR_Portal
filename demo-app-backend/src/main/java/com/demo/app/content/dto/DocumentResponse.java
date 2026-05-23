@@ -10,5 +10,7 @@ public record DocumentResponse(
         String mimeType,
         long sizeBytes,
         UUID uploadedBy,
-        Instant uploadedAt
+        String uploadedByName,
+        Instant uploadedAt,
+        String extractionStatus
 ) {}

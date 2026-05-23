@@ -41,6 +41,9 @@ services:
       UPLOAD_DIR: /app/uploads
       CV_OUTPUT_DIR: /app/output
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-cv-extractor-secret}
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: "5000"
+      SPRING_PROFILES_ACTIVE: prod
     volumes:
       - uploads_data:/app/uploads
       - cv_output_data:/app/output
@@ -61,12 +64,69 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
+      # ── paths ──────────────────────────────────────────────────────────
       UPLOAD_DIR: /app/uploads
       OUTPUT_DIR: /app/output
+
+      # ── backend ────────────────────────────────────────────────────────
       BACKEND_URL: http://app:8080
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-cv-extractor-secret}
-      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      BACKEND_TIMEOUT: "30"
+
+      # ── OCR engine  (liteparser | paddleocr | tesseract) ───────────────
+      OCR_ENGINE: ${OCR_ENGINE:-liteparser}
+      LITEPARSE_TIMEOUT: "60"
+
+      # ── LLM provider  (ollama | openai | azure_openai | anthropic) ─────
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_TIMEOUT: "300"
+      LLM_MAX_RETRIES: "3"
+      LLM_RETRY_DELAY: "2.0"
+
+      # Ollama (default)
+      OLLAMA_URL: ${OLLAMA_URL:-http://192.168.100.158:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3}
+
+      # OpenAI  (set LLM_PROVIDER=openai to activate)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+
+      # Azure OpenAI  (set LLM_PROVIDER=azure_openai to activate)
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-}
+      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION:-2024-02-01}
+
+      # Anthropic  (set LLM_PROVIDER=anthropic to activate)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+
+      # ── input validation thresholds ────────────────────────────────────
+      MAX_FILE_SIZE_MB: "20.0"
+      MAX_TEXT_CHARS: "40000"
+      MIN_TEXT_CHARS: "50"
+      MIN_WORD_COUNT: "30"
+      MIN_PRINTABLE_RATIO: "0.85"
+
+      # ── worker pool ────────────────────────────────────────────────────
+      WORKER_MAX_WORKERS: ${CV_WORKERS:-4}
+      WORKER_QUEUE_SIZE: "100"
+
+      # ── circuit breaker ────────────────────────────────────────────────
+      CB_FAILURE_THRESHOLD: "5"
+      CB_WINDOW_SECONDS: "60"
+      CB_COOLDOWN_SECONDS: "30"
+
+      # ── chunking ───────────────────────────────────────────────────────
+      CHUNK_SIZE: "4000"
+      CHUNK_OVERLAP: "200"
+
+      # ── output field length caps ───────────────────────────────────────
+      SANITIZE_MAX_FULL_NAME: "200"
+      SANITIZE_MAX_EMAIL: "320"
+      SANITIZE_MAX_SUMMARY: "5000"
+      SANITIZE_MAX_LIST_ITEM: "1000"
+      SANITIZE_MAX_DEFAULT: "500"
     volumes:
       - uploads_data:/app/uploads
       - cv_output_data:/app/output
@@ -74,8 +134,71 @@ services:
       app:
         condition: service_healthy
     restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'from config.settings import settings; import os; assert os.path.isdir(settings.upload_dir)'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - cluster.name=demo-app-cluster
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.13.0
+    environment:
+      - LS_JAVA_OPTS=-Xms256m -Xmx256m
+      - xpack.monitoring.enabled=false
+    ports:
+      - "5000:5000/tcp"
+      - "9600:9600"
+    volumes:
+      - ./logstash/pipeline/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9600/_node/stats | grep -q 'pipeline'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.0
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - xpack.security.enabled=false
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:5601/api/status | grep -q 'available'"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 60s
 
 volumes:
   postgres_data:
   uploads_data:
   cv_output_data:
+  elasticsearch_data:

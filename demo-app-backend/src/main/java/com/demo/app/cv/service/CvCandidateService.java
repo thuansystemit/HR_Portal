@@ -42,6 +42,23 @@ public class CvCandidateService {
     private String outputDir;
 
     public CvCandidateResponse ingest(IngestCvRequest request) {
+        String extractorStatus = request.extractionStatus();
+
+        // REJECTED or ERROR from extractor — mark document FAILED, no JSON to read
+        if ("REJECTED".equals(extractorStatus) || "ERROR".equals(extractorStatus)) {
+            String warnings = request.guardrailWarnings() != null
+                    ? String.join("; ", request.guardrailWarnings()) : extractorStatus;
+            documentService.updateExtractionStatus(request.documentId(), "FAILED",
+                    extractorStatus, warnings);
+            return null;
+        }
+
+        if (request.jsonFile() == null || request.jsonFile().isBlank()) {
+            documentService.updateExtractionStatus(request.documentId(), "FAILED",
+                    "INGEST", "jsonFile is missing");
+            throw new IllegalArgumentException("jsonFile is required for successful extraction");
+        }
+
         Path jsonPath = Paths.get(outputDir).resolve(request.jsonFile()).normalize();
         if (!jsonPath.startsWith(Paths.get(outputDir).normalize())) {
             throw new IllegalArgumentException("Invalid jsonFile path");
