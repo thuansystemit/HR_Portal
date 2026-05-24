@@ -88,6 +88,11 @@ public class CvCandidate {
     private String rawLanguage;
 
     @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20, nullable = false)
+    private CandidateHiringStatus hiringStatus = CandidateHiringStatus.AVAILABLE;
+
+    @Builder.Default
     @Column(nullable = false)
     private Instant extractedAt = Instant.now();
 

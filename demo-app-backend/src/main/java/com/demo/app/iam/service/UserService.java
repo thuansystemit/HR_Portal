@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -37,6 +38,14 @@ public class UserService {
         var p = userRepository.findAllActive(pageable);
         var content = p.getContent().stream().map(this::mapToResponse).toList();
         return new PagedResponse<>(content, page, size, p.getTotalElements(), p.getTotalPages());
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserResponse> listByRoleName(String roleName) {
+        return roleRepository.findByName(roleName)
+                .map(role -> userRepository.findActiveByRoleId(role.getId())
+                        .stream().map(this::mapToResponse).toList())
+                .orElse(List.of());
     }
 
     @Transactional

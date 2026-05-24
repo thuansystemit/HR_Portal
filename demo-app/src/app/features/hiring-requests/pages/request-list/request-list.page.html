@@ -1,0 +1,44 @@
+<app-page-layout
+  [title]="isHR ? 'Hiring Request Inbox' : 'My Hiring Requests'"
+  [subtitle]="isHR ? 'Incoming requests from the Dev Team.' : 'Track the status of your submitted requests.'"
+>
+  <ng-container actions>
+    @if (!isHR) {
+      <app-btn size="sm" icon="bi-plus-lg" routerLink="/hiring-requests/new">New Request</app-btn>
+    }
+  </ng-container>
+
+  @if (store.error()) {
+    <div class="alert alert-danger">{{ store.error() }}</div>
+  }
+
+  <app-data-table
+    [columns]="columns()"
+    [data]="store.requests()"
+    [loading]="store.loading()"
+    emptyMessage="No hiring requests found."
+  />
+</app-page-layout>
+
+<!-- Role Type badge template -->
+<ng-template #roleTypeTpl let-value>
+  <span class="badge" [ngClass]="roleTypeBadgeClass($any(value))">{{ value }}</span>
+</ng-template>
+
+<!-- Urgency badge template -->
+<ng-template #urgencyTpl let-value>
+  <span class="badge" [ngClass]="urgencyBadgeClass($any(value))">{{ value }}</span>
+</ng-template>
+
+<!-- Status badge template -->
+<ng-template #statusTpl let-value>
+  <span class="badge" [ngClass]="statusBadgeClass($any(value))">{{ statusLabel($any(value)) }}</span>
+</ng-template>
+
+<!-- Actions cell template -->
+<ng-template #actionsTpl let-row="row">
+  <div class="d-flex justify-content-center gap-2">
+    <app-btn size="sm" variant="outline-info" icon="bi-eye" [iconOnly]="true"
+             title="View" (btnClick)="viewRequest(row)" />
+  </div>
+</ng-template>

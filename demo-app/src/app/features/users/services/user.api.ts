@@ -59,6 +59,12 @@ export class UserApi {
       );
   }
 
+  getByRoleName(roleName: string): Observable<User[]> {
+    return this.http
+      .get<BackendUser[]>(`${this.base}?roleName=${encodeURIComponent(roleName)}`)
+      .pipe(map(list => list.map(mapUser)));
+  }
+
   getById(id: string): Observable<User | undefined> {
     return this.http
       .get<BackendUser>(`${this.base}/${id}`)

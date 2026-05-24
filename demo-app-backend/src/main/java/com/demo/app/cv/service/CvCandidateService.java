@@ -4,6 +4,7 @@ import com.demo.app.content.service.DocumentService;
 import com.demo.app.cv.dto.CreateCvCandidateRequest;
 import com.demo.app.cv.dto.CvCandidateResponse;
 import com.demo.app.cv.dto.IngestCvRequest;
+import com.demo.app.cv.dto.UpdateHiringStatusRequest;
 import com.demo.app.cv.entity.*;
 import com.demo.app.cv.extraction.CvExtractionResult;
 import com.demo.app.cv.extraction.CvExtractionResultMapper;
@@ -139,6 +140,17 @@ public class CvCandidateService {
                 .toList();
     }
 
+    public CvCandidateResponse updateHiringStatus(UUID id, UpdateHiringStatusRequest request) {
+        var candidate = candidateRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("CvCandidate", id));
+        try {
+            candidate.setHiringStatus(CandidateHiringStatus.valueOf(request.hiringStatus()));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid hiring status: " + request.hiringStatus());
+        }
+        return toResponse(candidateRepository.save(candidate));
+    }
+
     public void delete(UUID id) {
         var candidate = candidateRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("CvCandidate", id));
@@ -262,13 +274,14 @@ public class CvCandidateService {
                         cert.getIssuedDate(), cert.getExpiryDate(), cert.getCredentialId()))
                 .toList();
 
+        String hiringStatus = c.getHiringStatus() != null ? c.getHiringStatus().name() : "AVAILABLE";
         return new CvCandidateResponse(
                 c.getId(), c.getDocumentId(), c.getDocumentCategoryId(),
                 c.getFullName(), c.getEmail(), c.getPhone(), c.getCity(), c.getCountry(),
                 c.getLinkedinUrl(), c.getGithubUrl(), c.getPortfolioUrl(), c.getSummary(),
                 c.getToolsAndFrameworks(), c.getSoftSkills(), c.getProjects(), c.getPublications(),
                 c.getConfidenceOverall(), c.getLowConfidenceFields(), c.getMissingFields(),
-                c.getRawLanguage(), c.getExtractedAt(), c.getCreatedAt(),
+                c.getRawLanguage(), c.getExtractedAt(), c.getCreatedAt(), hiringStatus,
                 workExperiences, educations, technicalSkills, languages, certifications);
     }
 }

@@ -1,0 +1,91 @@
+<app-page-layout title="HR Analytics" subtitle="Recruitment pipeline performance, hiring velocity, and candidate skill coverage.">
+
+  @if (store.loading()) {
+    <div class="d-flex justify-content-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading…</span>
+      </div>
+    </div>
+  } @else if (store.error()) {
+    <div class="alert alert-danger d-flex align-items-center gap-2">
+      <i class="bi bi-exclamation-circle-fill"></i>
+      Failed to load analytics: {{ store.error() }}
+    </div>
+  } @else {
+
+    <!-- KPI cards -->
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-lg-3">
+        <div class="card shadow-sm text-center p-3">
+          <div class="kpi-value text-primary">{{ totalApplications() }}</div>
+          <div class="kpi-label">Total Applications</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="card shadow-sm text-center p-3">
+          <div class="kpi-value text-success">{{ totalHired() }}</div>
+          <div class="kpi-label">Candidates Hired</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="card shadow-sm text-center p-3">
+          <div class="kpi-value text-info">{{ overallHireRate() }}</div>
+          <div class="kpi-label">Overall Hire Rate</div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="card shadow-sm text-center p-3">
+          <div class="kpi-value text-warning">{{ avgTimeToHire() }}</div>
+          <div class="kpi-label">Avg Time to Hire</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 1: Funnel + Conversion Rates -->
+    <div class="row g-4 mb-4">
+      <div class="col-12 col-lg-5">
+        <div class="card shadow-sm p-3 h-100">
+          <app-hc-chart [options]="funnelOptions()" height="300px" />
+        </div>
+      </div>
+      <div class="col-12 col-lg-7">
+        <div class="card shadow-sm p-3 h-100">
+          <app-hc-chart [options]="conversionOptions()" height="300px" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: Application Trend (full width) -->
+    <div class="row g-4 mb-4">
+      <div class="col-12">
+        <div class="card shadow-sm p-3">
+          <app-hc-chart [options]="trendOptions()" height="280px" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 3: Top Skills + Time to Hire -->
+    <div class="row g-4">
+      <div class="col-12 col-lg-6">
+        <div class="card shadow-sm p-3 h-100">
+          <app-hc-chart [options]="topSkillsOptions()" height="380px" />
+        </div>
+      </div>
+      <div class="col-12 col-lg-6">
+        <div class="card shadow-sm p-3 h-100">
+          @if (store.timeToHire().length === 0) {
+            <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted py-4">
+              <i class="bi bi-hourglass fs-1 mb-2"></i>
+              <p class="mb-0">No hiring completions yet.</p>
+              <small>Time-to-hire data appears once candidates reach the HIRED stage.</small>
+            </div>
+          } @else {
+            <app-hc-chart [options]="timeToHireOptions()" height="380px" />
+          }
+        </div>
+      </div>
+    </div>
+
+  }
+
+</app-page-layout>

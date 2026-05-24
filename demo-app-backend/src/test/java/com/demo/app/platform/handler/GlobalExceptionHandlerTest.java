@@ -152,4 +152,26 @@ class GlobalExceptionHandlerTest {
         // Should not leak internal error details
         assertThat(response.getBody().getMessage()).doesNotContain("secret details");
     }
+
+    @Test
+    void handleIllegalState_returns422() {
+        var ex = new IllegalStateException("Job posting is not open for applications");
+
+        var response = handler.handleIllegalState(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getBody().getCode()).isEqualTo("VALIDATION_ERROR");
+        assertThat(response.getBody().getMessage()).contains("not open");
+    }
+
+    @Test
+    void handleIllegalArgument_returns400() {
+        var ex = new IllegalArgumentException("Invalid stage: UNKNOWN");
+
+        var response = handler.handleIllegalArgument(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody().getCode()).isEqualTo("BAD_REQUEST");
+        assertThat(response.getBody().getMessage()).contains("Invalid stage");
+    }
 }

@@ -1,0 +1,56 @@
+<app-page-layout title="Recruitment" subtitle="Manage job postings and track candidates through the hiring pipeline.">
+  <ng-container actions>
+    <button class="btn btn-sm btn-primary" (click)="navigateNew()">
+      <i class="bi bi-plus-circle me-1"></i> New Job Posting
+    </button>
+  </ng-container>
+
+  @if (store.error()) {
+    <div class="alert alert-danger">{{ store.error() }}</div>
+  }
+
+  <!-- Status filter tabs -->
+  <ul class="nav nav-tabs mb-3">
+    @for (tab of statusTabs; track tab.value) {
+      <li class="nav-item">
+        <button
+          class="nav-link"
+          [class.active]="activeStatus() === tab.value"
+          (click)="selectStatus(tab.value)"
+        >
+          {{ tab.label }}
+        </button>
+      </li>
+    }
+  </ul>
+
+  <app-data-table
+    [columns]="columns()"
+    [data]="store.postings()"
+    [loading]="store.loading()"
+    emptyMessage="No job postings found."
+  />
+</app-page-layout>
+
+<!-- Status badge template -->
+<ng-template #statusTpl let-value>
+  @if (value === 'DRAFT') {
+    <span class="badge bg-secondary">Draft</span>
+  } @else if (value === 'OPEN') {
+    <span class="badge bg-success">Open</span>
+  } @else if (value === 'CLOSED') {
+    <span class="badge bg-danger">Closed</span>
+  }
+</ng-template>
+
+<!-- Actions template -->
+<ng-template #actionsTpl let-row="row">
+  <div class="d-flex justify-content-center gap-2">
+    <app-btn size="sm" variant="outline-info" icon="bi-kanban" [iconOnly]="true"
+             title="View Board" (btnClick)="viewBoard(row)" />
+    <app-btn size="sm" variant="outline-primary" icon="bi-pencil" [iconOnly]="true"
+             title="Edit" (btnClick)="editPosting(row)" />
+    <app-btn size="sm" variant="outline-danger" icon="bi-x-circle" [iconOnly]="true"
+             title="Close" (btnClick)="confirmDelete(row)" />
+  </div>
+</ng-template>

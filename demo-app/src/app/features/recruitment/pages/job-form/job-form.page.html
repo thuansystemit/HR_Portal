@@ -1,0 +1,117 @@
+<app-page-layout
+  [title]="isEdit ? 'Edit Job Posting' : 'New Job Posting'"
+  subtitle="Fill in the details for this position."
+>
+  <ng-container actions>
+    <a class="btn btn-sm btn-outline-secondary" routerLink="/recruitment">
+      <i class="bi bi-arrow-left me-1"></i> Back to Jobs
+    </a>
+  </ng-container>
+
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+      <app-form-card [title]="isEdit ? 'Edit Position' : 'New Position'">
+
+        @if (store.error()) {
+          <div class="alert alert-danger py-2">{{ store.error() }}</div>
+        }
+
+        <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+          <div class="row g-3">
+
+            <!-- Title -->
+            <div class="col-12">
+              <label class="form-label fw-semibold" for="title">Job Title <span class="text-danger">*</span></label>
+              <input
+                id="title"
+                class="form-control"
+                [class.is-invalid]="isInvalid('title')"
+                formControlName="title"
+                placeholder="e.g. Senior Software Engineer"
+              />
+              <div class="invalid-feedback">Job title is required (min 2 characters).</div>
+            </div>
+
+            <!-- Department & Location -->
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold" for="department">Department</label>
+              <input
+                id="department"
+                class="form-control"
+                formControlName="department"
+                placeholder="e.g. Engineering"
+              />
+            </div>
+
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold" for="location">Location</label>
+              <input
+                id="location"
+                class="form-control"
+                formControlName="location"
+                placeholder="e.g. Remote, Hanoi"
+              />
+            </div>
+
+            <!-- Status & Deadline -->
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold">Status <span class="text-danger">*</span></label>
+              <app-dropdown
+                formControlName="status"
+                [options]="statusOptions"
+                placeholder="Select status…"
+              />
+              @if (isInvalid('status')) {
+                <div class="invalid-msg">Please select a status.</div>
+              }
+            </div>
+
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold" for="deadline">Application Deadline</label>
+              <input
+                id="deadline"
+                type="date"
+                class="form-control"
+                formControlName="deadline"
+              />
+            </div>
+
+            <!-- Description -->
+            <div class="col-12">
+              <label class="form-label fw-semibold" for="description">Job Description</label>
+              <textarea
+                id="description"
+                class="form-control"
+                formControlName="description"
+                rows="5"
+                placeholder="Describe the role, responsibilities, and what the team does…"
+              ></textarea>
+            </div>
+
+            <!-- Requirements -->
+            <div class="col-12">
+              <label class="form-label fw-semibold" for="requirements">Requirements</label>
+              <textarea
+                id="requirements"
+                class="form-control"
+                formControlName="requirements"
+                rows="5"
+                placeholder="List the required skills, experience, and qualifications…"
+              ></textarea>
+            </div>
+
+          </div>
+
+          <hr class="mt-4" />
+          <div class="d-flex justify-content-end gap-2">
+            <a class="btn btn-outline-secondary" routerLink="/recruitment">Cancel</a>
+            <app-btn type="submit" icon="bi-check-lg" [loading]="store.loading()">
+              {{ isEdit ? 'Save Changes' : 'Create Posting' }}
+            </app-btn>
+          </div>
+        </form>
+
+      </app-form-card>
+    </div>
+  </div>
+</app-page-layout>

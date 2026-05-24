@@ -1,0 +1,97 @@
+<app-page-layout title="New Hiring Request" subtitle="Submit a candidate request to the HR team.">
+  <ng-container actions>
+    <a class="btn btn-sm btn-outline-secondary" routerLink="/hiring-requests">
+      <i class="bi bi-arrow-left me-1"></i> Back
+    </a>
+  </ng-container>
+
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+      <app-form-card title="Request Details">
+
+        @if (serverError()) {
+          <div class="alert alert-danger py-2">{{ serverError() }}</div>
+        }
+
+        <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+          <div class="row g-3">
+
+            <!-- Title -->
+            <div class="col-12">
+              <label class="form-label fw-semibold" for="title">Job Title <span class="text-danger">*</span></label>
+              <input
+                id="title"
+                class="form-control"
+                [class.is-invalid]="isInvalid('title')"
+                formControlName="title"
+                placeholder="e.g. Senior Frontend Developer"
+              />
+              <div class="invalid-feedback">Title is required (minimum 2 characters).</div>
+            </div>
+
+            <!-- Role Type -->
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold">Role Type <span class="text-danger">*</span></label>
+              <app-dropdown
+                formControlName="roleType"
+                [options]="roleTypeOptions"
+                placeholder="Select role type…"
+              />
+              @if (isInvalid('roleType')) {
+                <div class="invalid-msg">Please select a role type.</div>
+              }
+            </div>
+
+            <!-- Department -->
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold" for="department">Department <span class="text-danger">*</span></label>
+              <input
+                id="department"
+                class="form-control"
+                [class.is-invalid]="isInvalid('department')"
+                formControlName="department"
+                placeholder="e.g. Engineering"
+              />
+              <div class="invalid-feedback">Department is required.</div>
+            </div>
+
+            <!-- Urgency -->
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold">Urgency <span class="text-danger">*</span></label>
+              <app-dropdown
+                formControlName="urgency"
+                [options]="urgencyOptions"
+                placeholder="Select urgency…"
+              />
+              @if (isInvalid('urgency')) {
+                <div class="invalid-msg">Please select an urgency level.</div>
+              }
+            </div>
+
+            <!-- Description -->
+            <div class="col-12">
+              <label class="form-label fw-semibold" for="description">Description <span class="text-muted fw-normal">(optional)</span></label>
+              <textarea
+                id="description"
+                class="form-control"
+                formControlName="description"
+                rows="4"
+                placeholder="Describe what you need and why..."
+              ></textarea>
+            </div>
+
+          </div>
+
+          <hr class="mt-4" />
+          <div class="d-flex justify-content-end gap-2">
+            <a class="btn btn-outline-secondary" routerLink="/hiring-requests">Cancel</a>
+            <app-btn type="submit" icon="bi-send" [loading]="saving()">
+              Submit Request
+            </app-btn>
+          </div>
+        </form>
+
+      </app-form-card>
+    </div>
+  </div>
+</app-page-layout>

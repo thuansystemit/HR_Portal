@@ -1,6 +1,7 @@
 import {
   Component, OnInit, TemplateRef, ViewChild, computed, inject, input, signal,
 } from '@angular/core';
+import { CandidateHiringStatus } from '../../models/cv-candidate.model';
 import { Router } from '@angular/router';
 import { SHARED_IMPORTS } from '../../../../shared/shared.imports';
 import { TableColumn, PageEvent } from '../../../../shared/components/data-table/data-table.model';
@@ -23,6 +24,7 @@ export class CandidateListPage implements OnInit {
   private  readonly dialog = inject(DialogService);
 
   @ViewChild('confidenceTpl', { static: true }) confidenceTpl!: TemplateRef<{ $implicit: unknown; row: unknown }>;
+  @ViewChild('statusTpl',     { static: true }) statusTpl!:     TemplateRef<{ $implicit: unknown; row: unknown }>;
   @ViewChild('actionsTpl',    { static: true }) actionsTpl!:    TemplateRef<{ $implicit: unknown; row: unknown }>;
 
   readonly pageSize = 10;
@@ -43,11 +45,37 @@ export class CandidateListPage implements OnInit {
           return [c.city, c.country].filter(Boolean).join(', ');
         },
       },
+      { key: 'hiringStatus',     label: 'Hiring Status', sortable: true, align: 'center',
+        cellTemplate: this.statusTpl },
       { key: 'confidenceOverall', label: 'Confidence', sortable: true, align: 'center',
         cellTemplate: this.confidenceTpl },
       { key: 'extractedAt', label: 'Extracted At',  sortable: true, formatter: appFormatDate },
       { key: 'actions',     label: 'Actions',       align: 'center', cellTemplate: this.actionsTpl },
     ]);
+  }
+
+  hiringStatusBadge(status: CandidateHiringStatus | null): string {
+    const map: Record<string, string> = {
+      AVAILABLE:  'badge bg-secondary',
+      IN_PROCESS: 'badge bg-info text-dark',
+      OFFERED:    'badge bg-warning text-dark',
+      HIRED:      'badge bg-success',
+      REJECTED:   'badge bg-danger',
+      WITHDRAWN:  'badge bg-dark',
+    };
+    return map[status ?? 'AVAILABLE'] ?? 'badge bg-secondary';
+  }
+
+  hiringStatusLabel(status: CandidateHiringStatus | null): string {
+    const map: Record<string, string> = {
+      AVAILABLE:  'Available',
+      IN_PROCESS: 'In Process',
+      OFFERED:    'Offered',
+      HIRED:      'Hired',
+      REJECTED:   'Rejected',
+      WITHDRAWN:  'Withdrawn',
+    };
+    return map[status ?? 'AVAILABLE'] ?? (status ?? 'Available');
   }
 
   onStateChange(state: PageEvent): void {

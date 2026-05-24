@@ -5,6 +5,7 @@ import { Sidebar } from '../sidebar/sidebar';
 import { Footer } from '../footer/footer';
 import { LayoutService } from '../layout.service';
 import { InactivityService } from '../../core/services/inactivity.service';
+import { AuthService } from '../../auth/services/auth';
 
 @Component({
   selector: 'app-shell',
@@ -15,7 +16,12 @@ import { InactivityService } from '../../core/services/inactivity.service';
 export class Shell implements OnInit, OnDestroy {
   protected readonly layout     = inject(LayoutService);
   private  readonly inactivity = inject(InactivityService);
+  private  readonly auth        = inject(AuthService);
 
-  ngOnInit():  void { this.inactivity.start(); }
+  ngOnInit(): void {
+    this.inactivity.start();
+    // Refresh session from server so permission changes take effect without re-login
+    this.auth.me().subscribe({ error: () => {} });
+  }
   ngOnDestroy(): void { this.inactivity.stop(); }
 }

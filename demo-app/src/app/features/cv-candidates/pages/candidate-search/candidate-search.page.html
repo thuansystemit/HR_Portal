@@ -1,0 +1,237 @@
+<app-page-layout title="Candidate Search" subtitle="Search and rank CV candidates by skills, experience, and more.">
+  <ng-container actions>
+    <a class="btn btn-sm btn-outline-secondary" routerLink="/documents">
+      <i class="bi bi-arrow-left me-1"></i> Documents
+    </a>
+  </ng-container>
+
+  <!-- Search Form Card -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <form [formGroup]="form" (ngSubmit)="onSearch()">
+        <div class="row g-3">
+
+          <!-- Skills (tag input) -->
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Skills</label>
+            <div class="d-flex flex-wrap gap-1 mb-1">
+              @for (tag of skillTags(); track tag) {
+                <span class="badge bg-primary d-flex align-items-center gap-1">
+                  {{ tag }}
+                  <button type="button" class="btn-close btn-close-white btn-close-sm"
+                          (click)="removeSkillTag(tag)" aria-label="Remove"></button>
+                </span>
+              }
+            </div>
+            <input type="text" class="form-control form-control-sm"
+                   placeholder="Type a skill and press Enter..."
+                   [value]="skillInput()"
+                   (input)="skillInput.set($any($event.target).value)"
+                   (keydown)="onSkillKeydown($event)" />
+          </div>
+
+          <!-- Title -->
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Job Title</label>
+            <input type="text" class="form-control form-control-sm"
+                   formControlName="title" placeholder="e.g. Senior Developer" />
+          </div>
+
+          <!-- Location -->
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Location</label>
+            <input type="text" class="form-control form-control-sm"
+                   formControlName="location" placeholder="e.g. Berlin, US" />
+          </div>
+
+          <!-- Min Years Experience -->
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Min. Experience (years)</label>
+            <input type="number" class="form-control form-control-sm" min="0"
+                   formControlName="minYearsExperience" placeholder="e.g. 3" />
+          </div>
+
+          <!-- Keyword -->
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Keyword</label>
+            <input type="text" class="form-control form-control-sm"
+                   formControlName="keyword" placeholder="Free text search..." />
+          </div>
+
+          <!-- Sort + Actions -->
+          <div class="col-12 d-flex align-items-end justify-content-between">
+            <div>
+              <label class="form-label fw-semibold">Sort by</label>
+              <select class="form-select form-select-sm" formControlName="sortBy" style="width: auto;">
+                <option value="relevanceScore">Relevance Score</option>
+                <option value="fullName">Name</option>
+                <option value="experienceYears">Experience</option>
+              </select>
+            </div>
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-sm btn-outline-secondary" (click)="onClear()">
+                <i class="bi bi-x-lg me-1"></i> Clear
+              </button>
+              <button type="submit" class="btn btn-sm btn-primary">
+                <i class="bi bi-search me-1"></i> Search
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Error -->
+  @if (store.error()) {
+    <div class="alert alert-danger">{{ store.error() }}</div>
+  }
+
+  <!-- Results -->
+  @if (hasSearched()) {
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <small class="text-muted">
+        @if (store.totalElements() > 0) {
+          Found {{ store.totalElements() }} candidate(s)
+        } @else if (!store.loading()) {
+          No candidates match your search criteria.
+        }
+      </small>
+    </div>
+
+    <app-data-table
+      [columns]="columns()"
+      [data]="store.results()"
+      [loading]="store.loading()"
+      [pageSize]="store.pageSize()"
+      [showPagination]="false"
+      [controlledPage]="page()"
+      (stateChange)="onStateChange($event)"
+      emptyMessage="No candidates match your search criteria."
+    />
+
+    @if (store.totalElements() > 0) {
+      <app-divider spacing="sm" thickness="0px" />
+
+      <app-pagination
+        [page]="page()"
+        [pageCount]="pageCount()"
+        [total]="store.totalElements()"
+        [pageSize]="store.pageSize()"
+        (pageChange)="onPageChange($event)"
+      />
+    }
+  }
+</app-page-layout>
+
+<!-- Relevance score badge -->
+<ng-template #scoreTpl let-value>
+  @if (value >= 80) {
+    <span class="badge bg-success">{{ value }}</span>
+  } @else if (value >= 50) {
+    <span class="badge bg-warning text-dark">{{ value }}</span>
+  } @else if (value > 0) {
+    <span class="badge bg-secondary">{{ value }}</span>
+  } @else {
+    <span class="text-muted">-</span>
+  }
+</ng-template>
+
+<!-- Top skills pills -->
+<ng-template #skillsTpl let-value>
+  <div class="d-flex flex-wrap gap-1">
+    @for (skill of (value || []); track skill; let i = $index) {
+      @if (i < 5) {
+        <span class="badge bg-light text-dark border">{{ skill }}</span>
+      }
+    }
+    @if ((value || []).length > 5) {
+      <span class="badge bg-light text-muted border">+{{ value.length - 5 }}</span>
+    }
+  </div>
+</ng-template>
+
+<!-- Location display -->
+<ng-template #locationTpl let-value let-row="row">
+  @if (row.city || row.country) {
+    {{ row.city }}@if (row.city && row.country) {, }{{ row.country }}
+  } @else {
+    <span class="text-muted">-</span>
+  }
+</ng-template>
+
+<!-- Actions cell -->
+<ng-template #actionsTpl let-row="row">
+  <div class="d-flex gap-1 justify-content-center">
+    <app-btn size="sm" variant="outline-info" icon="bi-person-circle" [iconOnly]="true"
+             title="View Profile" (btnClick)="viewCandidate(row)" />
+    <app-btn size="sm" variant="outline-success" icon="bi-briefcase" [iconOnly]="true"
+             title="Apply to Job" (btnClick)="openApplyModal(row)" />
+  </div>
+</ng-template>
+
+<!-- Apply to Job Modal -->
+@if (showApplyModal()) {
+  <div class="modal-backdrop fade show"></div>
+  <div class="modal fade show d-block" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-briefcase me-2"></i>Apply to Job Posting
+          </h5>
+          <button type="button" class="btn-close" (click)="closeApplyModal()"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted mb-3">
+            Applying <strong>{{ applyTarget()?.fullName }}</strong> to an open job posting.
+          </p>
+
+          @if (applyError()) {
+            <div class="alert alert-danger py-2">{{ applyError() }}</div>
+          }
+          @if (applySuccess()) {
+            <div class="alert alert-success py-2">
+              <i class="bi bi-check-circle me-1"></i>{{ applySuccess() }}
+            </div>
+          }
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="applyJobSelect">Job Posting <span class="text-danger">*</span></label>
+            @if (openPostings().length === 0 && !applyError()) {
+              <div class="text-muted small py-2">
+                <span class="spinner-border spinner-border-sm me-1"></span>Loading open postings…
+              </div>
+            } @else {
+              <select id="applyJobSelect" class="form-select"
+                      [value]="applyJobId()"
+                      (change)="applyJobId.set($any($event.target).value)">
+                <option value="">— Select a job posting —</option>
+                @for (posting of openPostings(); track posting.id) {
+                  <option [value]="posting.id">
+                    {{ posting.title }}{{ posting.department ? ' · ' + posting.department : '' }}{{ posting.location ? ' · ' + posting.location : '' }}
+                  </option>
+                }
+              </select>
+            }
+          </div>
+
+          <div class="mb-1">
+            <label class="form-label fw-semibold" for="applyNotesInput">Notes (optional)</label>
+            <textarea id="applyNotesInput" class="form-control" rows="2"
+                      [value]="applyNotes()"
+                      (input)="applyNotes.set($any($event.target).value)"
+                      placeholder="Initial notes about this candidate…"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" (click)="closeApplyModal()">Close</button>
+          <app-btn icon="bi-person-check" [loading]="applyLoading()" (btnClick)="submitApply()">
+            Apply
+          </app-btn>
+        </div>
+      </div>
+    </div>
+  </div>
+}

@@ -30,12 +30,24 @@ export class RoleFormBody implements OnInit, OnDestroy, DialogFormBody {
     name:        ['', [Validators.required, Validators.minLength(2)]],
     description: [''],
     permissions: this.fb.group({
-      usersView:   [false],
-      usersCreate: [false],
-      usersEdit:   [false],
-      usersDelete: [false],
-      rolesView:   [false],
-      rolesEdit:   [false],
+      usersView:               [false],
+      usersCreate:             [false],
+      usersEdit:               [false],
+      usersDelete:             [false],
+      rolesView:               [false],
+      rolesEdit:               [false],
+      hiringRequestsSubmit:    [false],
+      hiringRequestsViewOwn:   [false],
+      hiringRequestsViewAll:   [false],
+      hiringRequestsManage:    [false],
+      cvSharesSend:            [false],
+      cvSharesReceive:         [false],
+      cvSharesSubmitImpression:[false],
+      recruitmentBoardView:    [false],
+      recruitmentManage:       [false],
+      interviewFeedbackSubmit: [false],
+      candidateSearch:         [false],
+      analyticsView:           [false],
     }),
   });
 
@@ -50,6 +62,11 @@ export class RoleFormBody implements OnInit, OnDestroy, DialogFormBody {
           permissions: {
             usersView: false, usersCreate: false, usersEdit: false,
             usersDelete: false, rolesView: false, rolesEdit: false,
+            hiringRequestsSubmit: false, hiringRequestsViewOwn: false,
+            hiringRequestsViewAll: false, hiringRequestsManage: false,
+            cvSharesSend: false, cvSharesReceive: false, cvSharesSubmitImpression: false,
+            recruitmentBoardView: false, recruitmentManage: false, interviewFeedbackSubmit: false,
+            candidateSearch: false, analyticsView: false,
           },
         });
         if (id !== null) this.store.loadById(id);

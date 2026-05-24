@@ -47,14 +47,37 @@ export const routes: Routes = [
           import('./features/documents/documents.routes').then(m => m.DOCUMENTS_ROUTES),
       },
       {
+        path: 'hiring-requests',
+        loadChildren: () =>
+          import('./features/hiring-requests/hiring-requests.routes').then(m => m.HIRING_REQUESTS_ROUTES),
+      },
+      {
         path: 'cv-candidates',
+        canActivate: [permGuard('candidateSearch')],
         loadChildren: () =>
           import('./features/cv-candidates/cv-candidates.routes').then(m => m.CV_CANDIDATES_ROUTES),
+      },
+      {
+        path: 'cv-shares',
+        canActivate: [permGuard('cvSharesReceive')],
+        loadChildren: () =>
+          import('./features/cv-shares/cv-shares.routes').then(m => m.CV_SHARES_ROUTES),
+      },
+      {
+        path: 'recruitment',
+        canActivate: [permGuard('recruitmentManage')],
+        loadChildren: () =>
+          import('./features/recruitment/recruitment.routes').then(m => m.RECRUITMENT_ROUTES),
       },
       {
         path: 'knowledge',
         loadChildren: () =>
           import('./features/knowledge/knowledge.routes').then(m => m.KNOWLEDGE_ROUTES),
+      },
+      {
+        path: 'hr-analytics',
+        loadChildren: () =>
+          import('./features/hr-analytics/hr-analytics.routes').then(m => m.HR_ANALYTICS_ROUTES),
       },
       {
         path: 'profile',

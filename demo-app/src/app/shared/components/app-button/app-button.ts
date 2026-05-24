@@ -1,5 +1,4 @@
 import { Component, computed, input, output } from '@angular/core';
-import { NgClass } from '@angular/common';
 
 export type BtnVariant =
   | 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info'
@@ -11,7 +10,7 @@ export type BtnSize = 'sm' | 'lg' | '';
 
 @Component({
   selector: 'app-btn',
-  imports: [NgClass],
+  imports: [],
   templateUrl: './app-button.html',
   styleUrl: './app-button.scss',
 })

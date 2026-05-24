@@ -1,5 +1,13 @@
 export type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW';
 
+export type CandidateHiringStatus =
+  | 'AVAILABLE'
+  | 'IN_PROCESS'
+  | 'OFFERED'
+  | 'HIRED'
+  | 'REJECTED'
+  | 'WITHDRAWN';
+
 export interface CvWorkExperience {
   id: string;
   sortOrder: number;
@@ -80,6 +88,7 @@ export interface CvCandidate {
   rawLanguage: string | null;
   extractedAt: string;
   createdAt: string;
+  hiringStatus: CandidateHiringStatus;
   workExperiences: CvWorkExperience[];
   educations: CvEducation[];
   technicalSkills: string[];

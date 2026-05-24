@@ -1,0 +1,292 @@
+<app-page-layout
+  [title]="store.currentPosting()?.title ?? 'Job Board'"
+  subtitle="Manage candidates through the hiring pipeline."
+>
+  <ng-container actions>
+    <a class="btn btn-sm btn-outline-secondary me-2" routerLink="/recruitment">
+      <i class="bi bi-arrow-left me-1"></i> Back to Jobs
+    </a>
+    @if (store.currentPosting()) {
+      <span
+        class="badge fs-6 me-2"
+        [ngClass]="getStageBadgeClass($any(store.currentPosting()!.status))"
+      >
+        {{ store.currentPosting()!.status }}
+      </span>
+    }
+    <button class="btn btn-sm btn-primary" (click)="openApplyModal()">
+      <i class="bi bi-person-plus me-1"></i> Apply Candidate
+    </button>
+  </ng-container>
+
+  @if (store.error()) {
+    <div class="alert alert-danger">{{ store.error() }}</div>
+  }
+
+  <!-- Pipeline Stats -->
+  @if (pipelineStats(); as stats) {
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-sm-3">
+        <div class="card shadow-sm text-center p-2">
+          <div class="fs-4 fw-bold text-primary">{{ stats.total }}</div>
+          <div class="small text-muted">Total</div>
+        </div>
+      </div>
+      <div class="col-6 col-sm-3">
+        <div class="card shadow-sm text-center p-2">
+          <div class="fs-4 fw-bold text-info">{{ stats.active }}</div>
+          <div class="small text-muted">In Pipeline</div>
+        </div>
+      </div>
+      <div class="col-6 col-sm-3">
+        <div class="card shadow-sm text-center p-2">
+          <div class="fs-4 fw-bold text-success">{{ stats.hired }}</div>
+          <div class="small text-muted">Hired</div>
+        </div>
+      </div>
+      <div class="col-6 col-sm-3">
+        <div class="card shadow-sm text-center p-2">
+          <div class="fs-4 fw-bold text-warning">{{ stats.hireRate }}%</div>
+          <div class="small text-muted">Hire Rate</div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Kanban Board -->
+  @if (!store.loading()) {
+    <div class="kanban-board">
+      @for (stage of STAGE_ORDER; track stage) {
+        <div class="kanban-column">
+          <!-- Column Header -->
+          <div class="kanban-column-header">
+            <span class="fw-semibold">{{ getStageLabel(stage) }}</span>
+            <span class="badge rounded-pill ms-2" [ngClass]="getStageBadgeClass(stage)">
+              {{ getColumn(stage).length }}
+            </span>
+          </div>
+
+          <!-- Cards -->
+          <div class="kanban-cards">
+            @for (app of getColumn(stage); track app.id) {
+              <div class="card kanban-card">
+                <div class="card-body p-2">
+                  @if (app.documentCategoryId) {
+                    <a class="fw-semibold text-truncate d-block text-decoration-none"
+                       [routerLink]="['/cv-candidates', app.documentCategoryId, app.cvCandidateId]">
+                      {{ app.candidateFullName || '—' }}
+                    </a>
+                  } @else {
+                    <div class="fw-semibold text-truncate">{{ app.candidateFullName || '—' }}</div>
+                  }
+                  <div class="text-muted small text-truncate">{{ app.candidateEmail || '—' }}</div>
+                  <div class="text-muted small mt-1">
+                    <i class="bi bi-calendar3 me-1"></i>
+                    {{ app.appliedAt | appDate }}
+                  </div>
+
+                  <div class="mt-2 d-flex gap-1 flex-wrap">
+
+                    <!-- Move Stage — Angular-controlled dropdown -->
+                    <div class="move-dd" (click)="$event.stopPropagation()">
+                      <button
+                        class="btn btn-xs btn-outline-secondary"
+                        type="button"
+                        [disabled]="movingAppId() === app.id"
+                        (click)="toggleMove(app.id, $event)"
+                      >
+                        @if (movingAppId() === app.id) {
+                          <span class="spinner-border spinner-border-sm me-1"></span>
+                        } @else {
+                          <i class="bi bi-arrow-right-circle me-1"></i>
+                        }
+                        Move
+                      </button>
+
+                      @if (openMoveId() === app.id) {
+                        <ul class="move-dd__menu"
+                            [style.top.px]="moveDropdownPos().top"
+                            [style.left.px]="moveDropdownPos().left">
+                          @for (nextStage of getNextStages($any(app.stage)); track nextStage) {
+                            <li>
+                              <button
+                                class="move-dd__item"
+                                type="button"
+                                (click)="moveStage(app, nextStage)"
+                              >
+                                <span [class]="'badge me-2 ' + getStageBadgeClass(nextStage)">
+                                  {{ getStageLabel(nextStage) }}
+                                </span>
+                              </button>
+                            </li>
+                          }
+                        </ul>
+                      }
+                    </div>
+
+                    <!-- Schedule Interview (INTERVIEW stage only) -->
+                    @if (app.stage === 'INTERVIEW') {
+                      <button
+                        class="btn btn-xs btn-outline-primary"
+                        (click)="openInterviewModal(app)"
+                        title="Schedule Interview"
+                      >
+                        <i class="bi bi-camera-video me-1"></i>Interview
+                      </button>
+                    }
+                  </div>
+                </div>
+              </div>
+            }
+
+            @if (getColumn(stage).length === 0) {
+              <div class="kanban-empty text-muted small text-center py-3">
+                No candidates
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  } @else {
+    <div class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading…</span>
+      </div>
+    </div>
+  }
+</app-page-layout>
+
+<!-- ── Apply Candidate Modal ─────────────────────────────────────────────── -->
+@if (showApplyModal()) {
+  <div class="modal-backdrop fade show"></div>
+  <div class="modal fade show d-block" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Apply Candidate</h5>
+          <button type="button" class="btn-close" (click)="closeApplyModal()"></button>
+        </div>
+        <div class="modal-body">
+          @if (applyError()) {
+            <div class="alert alert-danger py-2">{{ applyError() }}</div>
+          }
+          <form [formGroup]="applyForm" novalidate>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Search Candidate</label>
+              <input
+                type="text"
+                class="form-control"
+                formControlName="candidateQuery"
+                placeholder="Type name or email…"
+                (input)="searchCandidates($any($event.target).value)"
+                autocomplete="off"
+              />
+              @if (candidateOptions().length > 0) {
+                <ul class="list-group mt-1 candidate-dropdown">
+                  @for (opt of candidateOptions(); track opt.id) {
+                    <li
+                      class="list-group-item list-group-item-action"
+                      style="cursor:pointer"
+                      (click)="selectCandidate(opt)"
+                    >
+                      <div class="fw-semibold">{{ opt.fullName }}</div>
+                      <div class="text-muted small">{{ opt.email }}</div>
+                    </li>
+                  }
+                </ul>
+              }
+              @if (selectedCandidate()) {
+                <div class="mt-1 text-success small">
+                  <i class="bi bi-check-circle me-1"></i>
+                  Selected: {{ selectedCandidate()!.fullName }}
+                </div>
+              }
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold" for="applyNotes">Notes (optional)</label>
+              <textarea
+                id="applyNotes"
+                class="form-control"
+                formControlName="notes"
+                rows="3"
+                placeholder="Any initial notes about this candidate…"
+              ></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" (click)="closeApplyModal()">
+            Cancel
+          </button>
+          <app-btn icon="bi-person-check" [loading]="applyLoading()" (btnClick)="submitApply()">
+            Apply
+          </app-btn>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Schedule Interview Modal ──────────────────────────────────────────── -->
+@if (showInterviewModal()) {
+  <div class="modal-backdrop fade show"></div>
+  <div class="modal fade show d-block" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Schedule Interview</h5>
+          <button type="button" class="btn-close" (click)="closeInterviewModal()"></button>
+        </div>
+        <div class="modal-body">
+          @if (interviewError()) {
+            <div class="alert alert-danger py-2">{{ interviewError() }}</div>
+          }
+          <form [formGroup]="interviewForm" novalidate>
+            <div class="mb-3">
+              <label class="form-label fw-semibold" for="scheduledAt">
+                Date &amp; Time <span class="text-danger">*</span>
+              </label>
+              <input
+                id="scheduledAt"
+                type="datetime-local"
+                class="form-control"
+                [class.is-invalid]="interviewForm.get('scheduledAt')?.invalid && interviewForm.get('scheduledAt')?.touched"
+                formControlName="scheduledAt"
+              />
+              <div class="invalid-feedback">Date and time are required.</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold" for="meetingLink">Meeting Link</label>
+              <input
+                id="meetingLink"
+                type="url"
+                class="form-control"
+                formControlName="meetingLink"
+                placeholder="https://meet.google.com/…"
+              />
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold" for="interviewNotes">Notes</label>
+              <textarea
+                id="interviewNotes"
+                class="form-control"
+                formControlName="notes"
+                rows="3"
+                placeholder="Interview focus areas, interviewer names…"
+              ></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" (click)="closeInterviewModal()">
+            Cancel
+          </button>
+          <app-btn icon="bi-camera-video" [loading]="interviewLoading()" (btnClick)="submitInterview()">
+            Schedule
+          </app-btn>
+        </div>
+      </div>
+    </div>
+  </div>
+}

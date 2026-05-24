@@ -1,11 +1,10 @@
 import { Component, computed, input, output } from '@angular/core';
-import { NgClass } from '@angular/common';
 
 export type PageItem = number | '...';
 
 @Component({
   selector: 'app-pagination',
-  imports: [NgClass],
+  imports: [],
   templateUrl: './pagination.html',
   styleUrl: './pagination.scss',
 })

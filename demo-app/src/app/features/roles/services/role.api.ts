@@ -21,12 +21,24 @@ interface PagedResponse<T> {
 }
 
 const PERMISSION_MAP: Record<string, keyof RolePermissions> = {
-  usersView:   'usersView',
-  usersCreate: 'usersCreate',
-  usersEdit:   'usersEdit',
-  usersDelete: 'usersDelete',
-  rolesView:   'rolesView',
-  rolesEdit:   'rolesEdit',
+  usersView:                  'usersView',
+  usersCreate:                'usersCreate',
+  usersEdit:                  'usersEdit',
+  usersDelete:                'usersDelete',
+  rolesView:                  'rolesView',
+  rolesEdit:                  'rolesEdit',
+  hiringRequestsSubmit:       'hiringRequestsSubmit',
+  hiringRequestsViewOwn:      'hiringRequestsViewOwn',
+  hiringRequestsViewAll:      'hiringRequestsViewAll',
+  hiringRequestsManage:       'hiringRequestsManage',
+  cvSharesSend:               'cvSharesSend',
+  cvSharesReceive:            'cvSharesReceive',
+  cvSharesSubmitImpression:   'cvSharesSubmitImpression',
+  recruitmentBoardView:       'recruitmentBoardView',
+  recruitmentManage:          'recruitmentManage',
+  interviewFeedbackSubmit:    'interviewFeedbackSubmit',
+  candidateSearch:            'candidateSearch',
+  analyticsView:              'analyticsView',
 };
 
 function codesFromPermissions(p: RolePermissions): string[] {
@@ -37,6 +49,11 @@ function permissionsFromCodes(codes: string[]): RolePermissions {
   const perms: RolePermissions = {
     usersView: false, usersCreate: false, usersEdit: false, usersDelete: false,
     rolesView: false, rolesEdit: false,
+    hiringRequestsSubmit: false, hiringRequestsViewOwn: false,
+    hiringRequestsViewAll: false, hiringRequestsManage: false,
+    cvSharesSend: false, cvSharesReceive: false, cvSharesSubmitImpression: false,
+    recruitmentBoardView: false, recruitmentManage: false, interviewFeedbackSubmit: false,
+    candidateSearch: false, analyticsView: false,
   };
   for (const code of codes) {
     const key = PERMISSION_MAP[code];

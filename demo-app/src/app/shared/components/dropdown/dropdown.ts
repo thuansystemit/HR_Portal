@@ -3,12 +3,11 @@ import {
   OnInit, computed, forwardRef, inject, input, signal,
 } from '@angular/core';
 import { ControlValueAccessor, FormsModule, NG_VALUE_ACCESSOR, NgControl } from '@angular/forms';
-import { NgClass } from '@angular/common';
 import { DropdownOption } from './dropdown.model';
 
 @Component({
   selector: 'app-dropdown',
-  imports: [NgClass, FormsModule],
+  imports: [FormsModule],
   templateUrl: './dropdown.html',
   styleUrl: './dropdown.scss',
   providers: [

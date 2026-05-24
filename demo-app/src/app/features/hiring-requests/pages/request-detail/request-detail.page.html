@@ -1,0 +1,262 @@
+<app-page-layout
+  [title]="request()?.title ?? 'Hiring Request'"
+  subtitle="Hiring request details."
+>
+  <ng-container actions>
+    <button class="btn btn-sm btn-outline-secondary" (click)="goBack()">
+      <i class="bi bi-arrow-left me-1"></i>
+      {{ isHR ? 'Inbox' : 'My Requests' }}
+    </button>
+  </ng-container>
+
+  @if (loading()) {
+    <div class="d-flex justify-content-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading…</span>
+      </div>
+    </div>
+  }
+
+  @if (error() && !loading()) {
+    <div class="alert alert-danger">{{ error() }}</div>
+  }
+
+  @if (request(); as req) {
+    <div class="row g-4">
+
+      <!-- Left column: request details -->
+      <div class="col-12 col-lg-7">
+        <div class="card h-100">
+          <div class="card-header fw-semibold">
+            <i class="bi bi-file-earmark-text me-2"></i>Request Details
+          </div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-6">
+                <div class="text-muted small fw-semibold mb-1">Role Type</div>
+                <span class="badge fs-6 px-3 py-2" [ngClass]="roleTypeBadgeClass(req.roleType)">
+                  {{ req.roleType }}
+                </span>
+              </div>
+              <div class="col-6">
+                <div class="text-muted small fw-semibold mb-1">Urgency</div>
+                <span class="badge fs-6 px-3 py-2" [ngClass]="urgencyBadgeClass(req.urgency)">
+                  {{ req.urgency }}
+                </span>
+              </div>
+              <div class="col-6">
+                <div class="text-muted small fw-semibold mb-1">Status</div>
+                <span class="badge fs-6 px-3 py-2" [ngClass]="statusBadgeClass(req.status)">
+                  {{ statusLabel(req.status) }}
+                </span>
+              </div>
+              <div class="col-6">
+                <div class="text-muted small fw-semibold mb-1">Department</div>
+                <span>{{ req.department }}</span>
+              </div>
+              <div class="col-6">
+                <div class="text-muted small fw-semibold mb-1">Requested by</div>
+                <span><i class="bi bi-person me-1"></i>{{ req.requesterName }}</span>
+              </div>
+              <div class="col-6">
+                <div class="text-muted small fw-semibold mb-1">Submitted</div>
+                <span>{{ req.createdAt | appDate }}</span>
+              </div>
+              @if (req.jobPostingId && isHR) {
+                <div class="col-12">
+                  <div class="text-muted small fw-semibold mb-1">Linked Job Posting</div>
+                  <a [routerLink]="['/recruitment', req.jobPostingId, 'board']"
+                     class="text-decoration-none">
+                    <i class="bi bi-briefcase me-1"></i>View Kanban Board
+                  </a>
+                </div>
+              }
+              @if (req.description) {
+                <div class="col-12">
+                  <div class="text-muted small fw-semibold mb-1">Description</div>
+                  <p class="mb-0">{{ req.description }}</p>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right column -->
+      <div class="col-12 col-lg-5">
+        @if (isHR) {
+          <!-- HR: status update -->
+          <div class="card">
+            <div class="card-header fw-semibold">
+              <i class="bi bi-pencil-square me-2"></i>Update Status
+            </div>
+            <div class="card-body">
+              @if (success()) {
+                <div class="alert alert-success py-2">
+                  <i class="bi bi-check-circle me-1"></i>{{ success() }}
+                </div>
+              }
+              <form [formGroup]="statusForm" (ngSubmit)="updateStatus()" novalidate>
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Status <span class="text-danger">*</span></label>
+                  <app-dropdown formControlName="status" [options]="statusOptions" placeholder="Select new status…" />
+                </div>
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">
+                    Linked Job Posting <span class="text-muted fw-normal">(optional)</span>
+                  </label>
+                  <app-dropdown formControlName="jobPostingId" [options]="jobPostingOptions()" placeholder="— None —" />
+                  @if (jobPostingOptions().length <= 1) {
+                    <div class="form-text">
+                      No job postings yet. <a routerLink="/recruitment">Create one in Job Postings</a>.
+                    </div>
+                  }
+                </div>
+                <div class="d-flex justify-content-end">
+                  <app-btn type="submit" icon="bi-check-lg" [loading]="saving()">Save Status</app-btn>
+                </div>
+              </form>
+            </div>
+          </div>
+        } @else {
+          <!-- Dev Team: read-only progress timeline -->
+          <div class="card">
+            <div class="card-header fw-semibold">
+              <i class="bi bi-clock-history me-2"></i>Progress
+            </div>
+            <div class="card-body p-0">
+              <ul class="list-group list-group-flush">
+                @for (step of ['PENDING','IN_PROGRESS','CANDIDATE_FOUND','HIRED']; track step) {
+                  <li class="list-group-item d-flex align-items-center gap-2 py-2">
+                    @if (req.status === step) {
+                      <i class="bi bi-circle-fill text-primary"></i>
+                    } @else if (isCompleted(req.status, step)) {
+                      <i class="bi bi-check-circle-fill text-success"></i>
+                    } @else {
+                      <i class="bi bi-circle text-muted"></i>
+                    }
+                    <span [class.fw-bold]="req.status === step"
+                          [class.text-muted]="!isCompleted(req.status, step) && req.status !== step">
+                      {{ statusLabel(step) }}
+                    </span>
+                  </li>
+                }
+              </ul>
+            </div>
+          </div>
+        }
+      </div>
+
+    </div>
+
+    <!-- ── HR: Share CV panel ──────────────────────────────────────────────── -->
+    @if (isHR) {
+      <div class="row g-4 mt-0">
+
+        <!-- Share CV form -->
+        <div class="col-12 col-lg-6">
+          <div class="card">
+            <div class="card-header fw-semibold">
+              <i class="bi bi-share me-2"></i>Share a CV with Dev Team
+            </div>
+            <div class="card-body">
+              @if (shareSuccess()) {
+                <div class="alert alert-success py-2">
+                  <i class="bi bi-check-circle me-1"></i>{{ shareSuccess() }}
+                </div>
+              }
+              @if (shareError()) {
+                <div class="alert alert-danger py-2">{{ shareError() }}</div>
+              }
+
+              <form [formGroup]="shareForm" (ngSubmit)="shareCV()" novalidate>
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">
+                    Candidate <span class="text-danger">*</span>
+                  </label>
+                  <app-dropdown
+                    formControlName="cvCandidateId"
+                    [options]="candidateOptions()"
+                    [searchable]="true"
+                    placeholder="Search candidate…"
+                  />
+                  @if (shareForm.get('cvCandidateId')?.invalid && shareForm.get('cvCandidateId')?.touched) {
+                    <div class="invalid-feedback d-block">Please select a candidate.</div>
+                  }
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">
+                    Share with <span class="text-danger">*</span>
+                  </label>
+                  <app-dropdown
+                    formControlName="sharedWith"
+                    [options]="devTeamOptions()"
+                    placeholder="Select Dev Team member…"
+                  />
+                  @if (shareForm.get('sharedWith')?.invalid && shareForm.get('sharedWith')?.touched) {
+                    <div class="invalid-feedback d-block">Please select a Dev Team member.</div>
+                  }
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">
+                    Note <span class="text-muted fw-normal">(optional)</span>
+                  </label>
+                  <textarea class="form-control" formControlName="comment" rows="2"
+                    placeholder="Any context for the reviewer…"></textarea>
+                </div>
+
+                <div class="d-flex justify-content-end">
+                  <app-btn type="submit" icon="bi-send" [loading]="shareSaving()">Share CV</app-btn>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- Already shared CVs -->
+        <div class="col-12 col-lg-6">
+          <div class="card h-100">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+              <span><i class="bi bi-people me-2"></i>Already Shared</span>
+              <span class="badge bg-secondary">{{ shares().length }}</span>
+            </div>
+
+            @if (shares().length === 0) {
+              <div class="card-body text-muted small">No CVs shared for this request yet.</div>
+            } @else {
+              <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                  @for (share of shares(); track share.id) {
+                    <li class="list-group-item py-2">
+                      <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div>
+                          <div class="fw-semibold small">{{ share.candidateFullName }}</div>
+                          <div class="text-muted small">
+                            <i class="bi bi-person me-1"></i>{{ share.sharedWithName }}
+                          </div>
+                        </div>
+                        <span class="badge {{ impressionBadge(share.impression) }}">
+                          {{ share.impression ? share.impression.replace('_', ' ') : 'Pending' }}
+                        </span>
+                      </div>
+                      @if (share.comment) {
+                        <div class="text-muted small fst-italic mt-1">"{{ share.comment }}"</div>
+                      }
+                      <div class="text-muted small mt-1">
+                        <i class="bi bi-calendar3 me-1"></i>{{ share.sharedAt | appDate }}
+                      </div>
+                    </li>
+                  }
+                </ul>
+              </div>
+            }
+          </div>
+        </div>
+
+      </div>
+    }
+
+  }
+</app-page-layout>

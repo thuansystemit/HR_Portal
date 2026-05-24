@@ -4,6 +4,8 @@ import com.demo.app.iam.dto.CreateUserRequest;
 import com.demo.app.iam.dto.PagedResponse;
 import com.demo.app.iam.dto.UpdateUserRequest;
 import com.demo.app.iam.dto.UserResponse;
+
+import java.util.List;
 import com.demo.app.iam.service.UserService;
 import com.demo.app.platform.idempotency.IdempotencyService;
 import jakarta.validation.Valid;
@@ -24,9 +26,14 @@ public class UserController {
     private final IdempotencyService idempotencyService;
 
     @GetMapping
-    public ResponseEntity<PagedResponse<UserResponse>> list(
+    public ResponseEntity<?> list(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String roleName) {
+        if (roleName != null && !roleName.isBlank()) {
+            List<UserResponse> users = userService.listByRoleName(roleName);
+            return ResponseEntity.ok(users);
+        }
         return ResponseEntity.ok(userService.list(page, size));
     }
 

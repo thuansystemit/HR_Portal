@@ -31,6 +31,11 @@
   />
 </app-page-layout>
 
+<!-- Hiring status badge -->
+<ng-template #statusTpl let-value>
+  <span [class]="hiringStatusBadge(value)">{{ hiringStatusLabel(value) }}</span>
+</ng-template>
+
 <!-- Confidence badge -->
 <ng-template #confidenceTpl let-value>
   @if (value === 'HIGH') {

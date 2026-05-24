@@ -4,11 +4,10 @@ import { NgTemplateOutlet } from '@angular/common';
 import { TableColumn, SortState, PageEvent } from './data-table.model';
 import { Dropdown } from '../dropdown/dropdown';
 import { DropdownOption } from '../dropdown/dropdown.model';
-import { Pagination } from '../pagination/pagination';
 
 @Component({
   selector: 'app-data-table',
-  imports: [FormsModule, NgTemplateOutlet, Dropdown, Pagination],
+  imports: [FormsModule, NgTemplateOutlet, Dropdown],
   templateUrl: './data-table.html',
   styleUrl: './data-table.scss',
 })

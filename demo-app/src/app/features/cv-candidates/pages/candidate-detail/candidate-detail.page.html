@@ -29,6 +29,9 @@
           <div>
             <h5 class="card-title mb-1 fw-bold">{{ cv.fullName }}</h5>
             <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+              <span [class]="hiringStatusBadge(cv.hiringStatus)">
+                <i class="bi bi-briefcase me-1"></i>{{ hiringStatusLabel(cv.hiringStatus) }}
+              </span>
               @if (cv.confidenceOverall === 'HIGH') {
                 <span class="badge bg-success">High Confidence</span>
               } @else if (cv.confidenceOverall === 'MEDIUM') {
@@ -76,6 +79,23 @@
                  class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-globe me-1"></i>Portfolio
               </a>
+            }
+            @if (isHR) {
+              @if (cv.hiringStatus !== 'WITHDRAWN') {
+                <app-btn size="sm" variant="dark" icon="bi-x-circle"
+                         [loading]="statusLoading()"
+                         title="Mark as withdrawn from consideration"
+                         (btnClick)="withdraw()">
+                  Withdraw
+                </app-btn>
+              } @else {
+                <app-btn size="sm" variant="outline-secondary" icon="bi-arrow-counterclockwise"
+                         [loading]="statusLoading()"
+                         title="Return candidate to available pool"
+                         (btnClick)="returnToPool()">
+                  Return to Pool
+                </app-btn>
+              }
             }
           </div>
         </div>
@@ -383,4 +403,43 @@
     }
 
   }
+
+  <!-- ── Application History ──────────────────────────────────────────── -->
+  <div class="card mb-4">
+    <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+      <span><i class="bi bi-briefcase-fill me-2"></i>Application History</span>
+      @if (appsLoading()) {
+        <span class="spinner-border spinner-border-sm text-secondary"></span>
+      } @else {
+        <span class="badge bg-secondary">{{ applications().length }}</span>
+      }
+    </div>
+
+    @if (!appsLoading() && applications().length === 0) {
+      <div class="card-body text-muted small">No applications found for this candidate.</div>
+    } @else if (applications().length > 0) {
+      <div class="card-body p-0">
+        <ul class="list-group list-group-flush">
+          @for (app of applications(); track app.id) {
+            <li class="list-group-item d-flex flex-wrap align-items-center justify-content-between gap-2 py-2">
+              <div>
+                <a class="fw-semibold text-decoration-none"
+                   [routerLink]="['/recruitment', app.jobPostingId, 'board']">
+                  {{ app.jobTitle ?? app.jobPostingId }}
+                </a>
+                @if (app.notes) {
+                  <div class="text-muted small mt-1">{{ app.notes }}</div>
+                }
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <span [class]="stageBadgeClass(app.stage)">{{ app.stage }}</span>
+                <span class="text-muted small">{{ app.appliedAt | appDate }}</span>
+              </div>
+            </li>
+          }
+        </ul>
+      </div>
+    }
+  </div>
+
 </app-page-layout>

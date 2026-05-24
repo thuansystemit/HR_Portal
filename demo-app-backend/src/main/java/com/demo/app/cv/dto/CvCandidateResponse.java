@@ -30,6 +30,7 @@ public record CvCandidateResponse(
         String rawLanguage,
         Instant extractedAt,
         Instant createdAt,
+        String hiringStatus,
         List<WorkExperienceResponse> workExperiences,
         List<EducationResponse> educations,
         List<String> technicalSkills,

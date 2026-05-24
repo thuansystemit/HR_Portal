@@ -23,12 +23,30 @@ interface LoginResponse {
 const SESSION_KEY = 'demo_user';
 
 const PERMISSION_MAP: Record<string, keyof RolePermissions> = {
-  usersView:   'usersView',
-  usersCreate: 'usersCreate',
-  usersEdit:   'usersEdit',
-  usersDelete: 'usersDelete',
-  rolesView:   'rolesView',
-  rolesEdit:   'rolesEdit',
+  // IAM
+  usersView:                'usersView',
+  usersCreate:              'usersCreate',
+  usersEdit:                'usersEdit',
+  usersDelete:              'usersDelete',
+  rolesView:                'rolesView',
+  rolesEdit:                'rolesEdit',
+  // Hiring Requests
+  hiringRequestsSubmit:     'hiringRequestsSubmit',
+  hiringRequestsViewOwn:    'hiringRequestsViewOwn',
+  hiringRequestsViewAll:    'hiringRequestsViewAll',
+  hiringRequestsManage:     'hiringRequestsManage',
+  // CV Sharing
+  cvSharesSend:             'cvSharesSend',
+  cvSharesReceive:          'cvSharesReceive',
+  cvSharesSubmitImpression: 'cvSharesSubmitImpression',
+  // Recruitment
+  recruitmentBoardView:     'recruitmentBoardView',
+  recruitmentManage:        'recruitmentManage',
+  interviewFeedbackSubmit:  'interviewFeedbackSubmit',
+  // Candidates
+  candidateSearch:          'candidateSearch',
+  // Analytics
+  analyticsView:            'analyticsView',
 };
 
 @Injectable({ providedIn: 'root' })
@@ -50,6 +68,11 @@ export class AuthService {
     const perms: RolePermissions = {
       usersView: false, usersCreate: false, usersEdit: false, usersDelete: false,
       rolesView: false, rolesEdit: false,
+      hiringRequestsSubmit: false, hiringRequestsViewOwn: false,
+      hiringRequestsViewAll: false, hiringRequestsManage: false,
+      cvSharesSend: false, cvSharesReceive: false, cvSharesSubmitImpression: false,
+      recruitmentBoardView: false, recruitmentManage: false, interviewFeedbackSubmit: false,
+      candidateSearch: false, analyticsView: false,
     };
     for (const code of codes) {
       const key = PERMISSION_MAP[code];

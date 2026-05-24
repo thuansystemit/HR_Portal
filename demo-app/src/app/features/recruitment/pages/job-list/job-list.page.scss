@@ -1,0 +1,9 @@
+.nav-tabs .nav-link {
+  cursor: pointer;
+  border: none;
+  background: none;
+
+  &.active {
+    font-weight: 600;
+  }
+}
