@@ -53,10 +53,10 @@ class UserControllerTest {
 
         when(userService.list(0, 10)).thenReturn(paged);
 
-        var result = userController.list(0, 10);
+        var result = userController.list(0, 10, null);
 
         assertThat(result.getStatusCode().value()).isEqualTo(200);
-        assertThat(result.getBody().content()).hasSize(1);
+        assertThat(((PagedResponse<?>) result.getBody()).content()).hasSize(1);
     }
 
     @Test

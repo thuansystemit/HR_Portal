@@ -38,6 +38,7 @@ class CvCandidateControllerTest {
                 null, null, null, null, null, null,
                 null, null, null, null,
                 Instant.now(), Instant.now(),
+                "AVAILABLE",
                 List.of(), List.of(), List.of(), List.of(), List.of());
     }
 

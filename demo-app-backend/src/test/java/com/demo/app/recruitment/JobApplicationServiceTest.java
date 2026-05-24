@@ -11,6 +11,7 @@ import com.demo.app.recruitment.entity.JobPosting;
 import com.demo.app.recruitment.repository.ApplicationStageHistoryRepository;
 import com.demo.app.recruitment.repository.JobApplicationRepository;
 import com.demo.app.recruitment.repository.JobPostingRepository;
+import com.demo.app.recruitment.service.CandidateHiringStatusService;
 import com.demo.app.recruitment.service.JobApplicationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,6 +35,7 @@ class JobApplicationServiceTest {
     @Mock JobApplicationRepository jobApplicationRepository;
     @Mock ApplicationStageHistoryRepository stageHistoryRepository;
     @Mock CvCandidateRepository cvCandidateRepository;
+    @Mock CandidateHiringStatusService hiringStatusService;
 
     @InjectMocks
     JobApplicationService jobApplicationService;
