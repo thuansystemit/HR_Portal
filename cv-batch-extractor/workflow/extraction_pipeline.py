@@ -33,7 +33,7 @@ def _slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
 
 
-def _build_filename(full_name: str | None, document_id: str) -> str:
+def _build_cv_filename(full_name: str | None, document_id: str) -> str:
     name = (full_name or "unknown").strip().split()
     first = _slugify(name[0]) if name else "unknown"
     last = _slugify(name[-1]) if len(name) >= 2 else ""
@@ -42,18 +42,42 @@ def _build_filename(full_name: str | None, document_id: str) -> str:
     return f"cv_{slug}_{short_id}.json"
 
 
-def _write_json(ctx: PipelineContext) -> str | None:
+def _build_technical_filename(title: str | None, document_id: str) -> str:
+    slug = _slugify((title or "document")[:40]) or "document"
+    short_id = document_id.replace("-", "")[:8]
+    return f"tech_{slug}_{short_id}.json"
+
+
+def _write_cv_json(ctx: PipelineContext) -> str | None:
     if ctx.cv_data is None:
         return None
-    filename = _build_filename(ctx.cv_data.fullName, ctx.document_id)
+    filename = _build_cv_filename(ctx.cv_data.fullName, ctx.document_id)
     out_path = Path(settings.output_dir) / filename
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(
         json.dumps(ctx.cv_data.model_dump(), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    logger.info("Saved extraction to %s", out_path)
+    logger.info("Saved CV extraction to %s", out_path)
     return filename
+
+
+def _write_technical_json(ctx: PipelineContext) -> str | None:
+    if ctx.knowledge_data is None:
+        return None
+    filename = _build_technical_filename(ctx.knowledge_data.title, ctx.document_id)
+    out_path = Path(settings.output_dir) / filename
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
+        json.dumps(ctx.knowledge_data.model_dump(), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    logger.info("Saved technical extraction to %s", out_path)
+    return filename
+
+
+# keep old name so any direct callers still work
+_write_json = _write_cv_json
 
 
 class ExtractionPipeline:
@@ -118,7 +142,7 @@ class ExtractionPipeline:
 
     # ── public ─────────────────────────────────────────────────────────────
 
-    def run(self, document_id: str, category_id: str, file_path: str) -> ProcessingResult:
+    def run(self, document_id: str, category_id: str, file_path: str, document_type: str = "CV") -> ProcessingResult:
         self._ensure_built()
         ctx = PipelineContext(
             document_id=document_id,
@@ -130,19 +154,26 @@ class ExtractionPipeline:
         t0 = time.monotonic()
 
         try:
-            with tracer.start_span("extraction", attributes={"document_id": document_id}):
-                self._run_stages(ctx)
+            with tracer.start_span("extraction", attributes={"document_id": document_id, "document_type": document_type}):
+                if document_type == "TECHNICAL":
+                    self._run_stages_technical(ctx)
+                else:
+                    self._run_stages(ctx)
 
             status = _aggregate_status(ctx.reports)
-            output_file = _write_json(ctx) if status in ("PASS", "DEGRADED") else None
+
+            if document_type == "TECHNICAL":
+                output_file = _write_technical_json(ctx) if status in ("PASS", "DEGRADED") else None
+            else:
+                output_file = _write_cv_json(ctx) if status in ("PASS", "DEGRADED") else None
 
             elapsed = time.monotonic() - t0
             metrics.observe("document_processing_seconds", elapsed)
             metrics.inc(f"documents.{status.lower()}")
 
             logger.info(
-                "Document %s finished status=%s warnings=%d elapsed=%.2fs",
-                document_id, status,
+                "Document %s type=%s finished status=%s warnings=%d elapsed=%.2fs",
+                document_id, document_type, status,
                 sum(1 for r in ctx.reports if r.status == "WARN"),
                 elapsed,
             )
@@ -152,6 +183,7 @@ class ExtractionPipeline:
                 category_id=category_id,
                 status=status,
                 cv_data=ctx.cv_data,
+                knowledge_data=ctx.knowledge_data,
                 output_file=output_file,
                 reports=ctx.reports,
             )
@@ -164,6 +196,7 @@ class ExtractionPipeline:
                 category_id=category_id,
                 status="ERROR",
                 cv_data=None,
+                knowledge_data=None,
                 output_file=None,
                 reports=ctx.reports,
                 error=str(exc),
@@ -322,3 +355,71 @@ class ExtractionPipeline:
             ))
         else:
             ctx.reports.append(ValidationReport(validator="injection", status="PASS"))
+
+    # ── technical (knowledge graph) extraction path ────────────────────────
+
+    def _run_stages_technical(self, ctx: PipelineContext) -> None:
+        from domain.technical_schema import KnowledgeExtraction
+        from pydantic import ValidationError
+
+        # 1 — file validation
+        self._validate_file(ctx)
+        if _is_blocked(ctx):
+            return
+
+        # 2 — preprocess + OCR
+        ctx.preprocessed_path = self._preprocessor.process(ctx.file_path, "technical")
+
+        import time
+        t_ocr = time.monotonic()
+        ocr_result = self._ocr.extract(ctx.preprocessed_path or ctx.file_path)
+        metrics.observe("ocr_seconds", time.monotonic() - t_ocr)
+        ctx.raw_text = ocr_result.text
+        ctx.ocr_confidence = ocr_result.confidence
+
+        # 3 — text validation (length / quality / injection)
+        self._validate_text(ctx)
+        if _is_blocked(ctx):
+            return
+
+        # 4 — LLM knowledge extraction
+        if not ctx.chunks:
+            ctx.chunks = self._chunker.chunk(ctx.prompt_text or ctx.raw_text or "")
+
+        if ctx.chunks:
+            t_llm = time.monotonic()
+            from llm.prompt_templates.technical_extraction import build as build_prompt
+            prompt = build_prompt(ctx.chunks[0])
+            ctx.llm_raw = self._llm.complete(prompt)
+            metrics.observe("llm_seconds", time.monotonic() - t_llm)
+
+        # 5 — parse and validate LLM output
+        if not ctx.llm_raw:
+            ctx.reports.append(ValidationReport(
+                validator="knowledge_schema",
+                status="BLOCK",
+                reason="knowledge_schema: LLM returned empty response",
+            ))
+            return
+
+        raw = ctx.llm_raw.strip()
+        # strip optional markdown code fences
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0]
+
+        try:
+            data = json.loads(raw)
+            ctx.knowledge_data = KnowledgeExtraction.model_validate(data)
+            ctx.reports.append(ValidationReport(validator="knowledge_schema", status="PASS"))
+            logger.info(
+                "Technical extraction: %d technologies, %d concepts, %d relationships",
+                len(ctx.knowledge_data.technologies),
+                len(ctx.knowledge_data.concepts),
+                len(ctx.knowledge_data.relationships),
+            )
+        except (json.JSONDecodeError, ValidationError) as exc:
+            ctx.reports.append(ValidationReport(
+                validator="knowledge_schema",
+                status="BLOCK",
+                reason=f"knowledge_schema: failed to parse LLM output — {exc}",
+            ))

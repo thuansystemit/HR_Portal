@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_DB: demo
       POSTGRES_USER: demo
@@ -145,16 +145,17 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
     environment:
       - discovery.type=single-node
-      - xpack.security.enabled=false
+      - xpack.security.enabled=true
       - xpack.security.enrollment.enabled=false
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
       - cluster.name=demo-app-cluster
+      - ELASTIC_PASSWORD=Change_Me_Now!
     ports:
       - "9200:9200"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      test: ["CMD-SHELL", "curl -s -u elastic:Change_Me_Now! http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -165,6 +166,8 @@ services:
     environment:
       - LS_JAVA_OPTS=-Xms256m -Xmx256m
       - xpack.monitoring.enabled=false
+      - ELASTICSEARCH_USER=elastic
+      - ELASTICSEARCH_PASSWORD=Change_Me_Now!
     ports:
       - "5000:5000/tcp"
       - "9600:9600"
@@ -184,7 +187,10 @@ services:
     image: docker.elastic.co/kibana/kibana:8.13.0
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - xpack.security.enabled=false
+      - xpack.security.enabled=true
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=KibanaSystem1!
+      - xpack.encryptedSavedObjects.encryptionKey=a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
     ports:
       - "5601:5601"
     depends_on:

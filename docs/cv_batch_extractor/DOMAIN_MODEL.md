@@ -1,4 +1,4 @@
-# CV Batch Extractor — Domain Model
+# Document Batch Extractor — Domain Model
 
 ---
 
@@ -64,8 +64,9 @@ class PipelineContext:
     llm_raw: str | None = None                # raw string from LLM
 
     # ── stage 9: validation ───────────────────────────────────────────
-    raw_dict: dict | None = None              # parsed JSON from llm_raw
-    cv_data: CvExtraction | None = None       # Pydantic-validated model
+    raw_dict: dict | None = None              # parsed JSON from llm_raw (CV path)
+    cv_data: CvExtraction | None = None       # Pydantic-validated model (CV path)
+    knowledge_data: KnowledgeExtraction | None = None  # Pydantic-validated model (TECHNICAL path)
 
     # ── full audit trail ──────────────────────────────────────────────
     reports: list[ValidationReport] = field(default_factory=list)
@@ -85,11 +86,12 @@ class ProcessingResult:
     document_id: str
     category_id: str
     status: Literal["PASS", "DEGRADED", "REJECTED", "ERROR"]
-    cv_data: CvExtraction | None
-    output_file: str | None          # filename in output_dir; None on REJECTED / ERROR
+    cv_data: CvExtraction | None          # populated on CV path
+    output_file: str | None               # filename in output_dir; None on REJECTED / ERROR
+    knowledge_data: KnowledgeExtraction | None = None  # populated on TECHNICAL path
 
     reports: list[ValidationReport] = field(default_factory=list)
-    error: str | None = None         # populated on ERROR only
+    error: str | None = None              # populated on ERROR only
 
     @property
     def warnings(self) -> list[str]:
@@ -98,7 +100,44 @@ class ProcessingResult:
 
 ---
 
-## 4. CvExtraction (Pydantic Schema)
+## 4. KnowledgeExtraction (Pydantic Schema)
+
+Single source of truth for extracted technical-document knowledge. Stored as JSON in `output_dir` and sent to the backend via `POST /api/v1/knowledge/ingest`.
+
+```python
+# domain/technical_schema.py
+
+class TechEntity(BaseModel):
+    name: str
+    version: str | None = None
+    category: str | None = None          # language|framework|library|database|tool|protocol|cloud_service|platform|other
+    aliases: list[str] = Field(default_factory=list)
+
+
+class ConceptEntity(BaseModel):
+    name: str
+    definition: str | None = None
+    relatedConcepts: list[str] = Field(default_factory=list)
+
+
+class Relationship(BaseModel):
+    source: str                          # must match a TechEntity or ConceptEntity name
+    target: str
+    relationType: str                    # depends_on|uses|implements|extends|replaces|part_of|…
+    weight: float | None = None          # 0.0–1.0 confidence; default 1.0
+
+
+class KnowledgeExtraction(BaseModel):
+    title: str | None = None
+    summary: str | None = None
+    technologies: list[TechEntity] = Field(default_factory=list)
+    concepts: list[ConceptEntity] = Field(default_factory=list)
+    relationships: list[Relationship] = Field(default_factory=list)
+```
+
+---
+
+## 5. CvExtraction (Pydantic Schema)
 
 Single source of truth for extracted CV structure. Stored as JSON in `output_dir` and sent to the backend via `/api/v1/cv-candidates`.
 
@@ -183,7 +222,7 @@ class CvExtraction(BaseModel):
 
 ---
 
-## 5. Settings
+## 6. Settings
 
 All configuration via environment variables. Loaded once at startup by `config/settings.py`.
 
@@ -258,7 +297,7 @@ class Settings(BaseSettings):
 
 ---
 
-## 6. OCR Adapter Contract
+## 7. OCR Adapter Contract
 
 ```python
 # ocr/base.py
@@ -284,7 +323,7 @@ class OCRAdapter(Protocol):
 
 ---
 
-## 7. LLM Adapter Contract
+## 8. LLM Adapter Contract
 
 ```python
 # llm/base.py
@@ -304,7 +343,7 @@ class LLMAdapter(Protocol):
 
 ---
 
-## 8. Status Aggregation
+## 9. Status Aggregation
 
 After all pipeline stages complete, `ExtractionPipeline` calls `_aggregate_status`:
 
@@ -321,12 +360,12 @@ def _aggregate_status(reports: list[ValidationReport]) -> Literal["PASS", "DEGRA
 
 ---
 
-## 9. Output File Naming
+## 10. Output File Naming
 
 ```python
 # workflow/extraction_pipeline.py
 
-def _build_filename(full_name: str | None, document_id: str) -> str:
+def _build_cv_filename(full_name: str | None, document_id: str) -> str:
     # example: "cv_john_doe_3b4b7594.json"
     name_parts = (full_name or "unknown").strip().split()
     first = slugify(name_parts[0])
@@ -334,6 +373,12 @@ def _build_filename(full_name: str | None, document_id: str) -> str:
     short_id = document_id.replace("-", "")[:8]
     slug = f"{first}_{last}" if last else first
     return f"cv_{slug}_{short_id}.json"
+
+def _build_technical_filename(title: str | None, document_id: str) -> str:
+    # example: "tech_microservices_architecture_3b4b7594.json"
+    slug = slugify((title or "document")[:40]) or "document"
+    short_id = document_id.replace("-", "")[:8]
+    return f"tech_{slug}_{short_id}.json"
 ```
 
-Written to `settings.output_dir`. The filename is sent to the backend as `jsonFile` in the notification payload.
+Written to `settings.output_dir`. For CV documents, the filename is sent to the backend as `jsonFile`. For TECHNICAL documents, the structured `KnowledgeExtraction` payload is posted directly to `/api/v1/knowledge/ingest` — the file is a local audit copy only.

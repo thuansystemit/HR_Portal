@@ -13,15 +13,17 @@ logger = logging.getLogger(__name__)
 
 _SUPPORTED_EXTENSIONS = {".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp"}
 
+_ROUTED_TYPES = {"cv", "technical"}
+
 
 class CvFileHandler(FileSystemEventHandler):
     """
-    Watches the upload directory for new CV files.
+    Watches the upload directory for new documents.
 
     Expected path structure:
-        {upload_dir}/cv/{categoryId}/{documentId}/{filename}
+        {upload_dir}/{documentType}/{categoryId}/{documentId}/{filename}
 
-    Only files under the cv/ subtree are processed.
+    Supported document types: cv, technical.
     """
 
     def __init__(self, submit_fn) -> None:
@@ -46,14 +48,18 @@ class CvFileHandler(FileSystemEventHandler):
             logger.warning("Unexpected path depth (%d parts), skipping: %s", len(parts), path)
             return
 
-        if parts[0].lower() != "cv":
+        doc_type = parts[0].lower()
+        if doc_type not in _ROUTED_TYPES:
             return
 
         category_id = parts[1]
         document_id = parts[2]
 
-        logger.info("CV detected: %s  doc=%s  cat=%s", path.name, document_id, category_id)
-        self._submit(document_id, category_id, str(path))
+        logger.info(
+            "Document detected: type=%s  file=%s  doc=%s  cat=%s",
+            doc_type.upper(), path.name, document_id, category_id,
+        )
+        self._submit(document_id, category_id, str(path), doc_type.upper())
 
 
 def start(submit_fn) -> None:
@@ -68,7 +74,7 @@ def start(submit_fn) -> None:
     observer = Observer()
     observer.schedule(CvFileHandler(submit_fn), settings.upload_dir, recursive=True)
     observer.start()
-    logger.info("Watching %s for new CV files", settings.upload_dir)
+    logger.info("Watching %s for new documents (cv, technical)", settings.upload_dir)
 
     try:
         while True:

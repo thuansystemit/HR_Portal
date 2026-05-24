@@ -167,7 +167,9 @@ PASS   None
 
 ## Stage 9 — Output Validation
 
-### SchemaValidator
+> **Note:** Stage 9 differs between document types. CV documents go through `SchemaValidator` → `ConfidenceScorer` → `HallucinationChecker`. TECHNICAL documents use an inline `knowledge_schema` validator that parses the LLM response directly into `KnowledgeExtraction`. See §9b below.
+
+### 9a — CV Documents: SchemaValidator
 
 Module: `validation/schema_validator.py`
 
@@ -258,6 +260,34 @@ Checks performed (all `WARN`):
 
 ---
 
+### 9b — TECHNICAL Documents: KnowledgeSchemaValidator
+
+Implemented inline in `ExtractionPipeline._run_stages_technical()`. No separate validator class — logic lives in the pipeline method.
+
+| Field | Value |
+|---|---|
+| `validator` name | `"knowledge_schema"` |
+| Reads from ctx | `ctx.llm_raw` |
+| Writes to ctx | `ctx.knowledge_data` (`KnowledgeExtraction` instance) |
+
+**Logic:**
+1. Strip optional markdown code fences (` ```json ` … ` ``` `)
+2. `json.loads(llm_raw)` — if fails → `BLOCK`
+3. `KnowledgeExtraction.model_validate(data)` — if Pydantic validation fails → `BLOCK`
+4. On success → set `ctx.knowledge_data`, emit `PASS`
+
+**Report examples:**
+```
+BLOCK  "knowledge_schema: LLM returned empty response"
+BLOCK  "knowledge_schema: failed to parse LLM output — JSONDecodeError: ..."
+BLOCK  "knowledge_schema: failed to parse LLM output — ValidationError: ..."
+PASS   None
+```
+
+No `ConfidenceScorer` or `HallucinationChecker` runs on the TECHNICAL path. The structural validity of the extracted entities (entity names present in source text, relationship endpoints exist) is delegated to the backend `KnowledgeService`.
+
+---
+
 ## Stage 10 — Post-Processing
 
 ### Normalizer
@@ -309,6 +339,8 @@ def _aggregate_status(reports: list[ValidationReport]) -> str:
 
 ## Validation Execution Order
 
+### CV Path
+
 ```
 Stage 2:  FileSizeValidator
           MimeTypeValidator
@@ -321,7 +353,7 @@ Stage 5:  TextLengthValidator
 
 Stage 9:  SchemaValidator
             ├─ json_parse
-            └─ schema
+            └─ schema (CvExtraction)
           ConfidenceScorer
           HallucinationChecker
               ── BLOCK? → dead-letter
@@ -330,7 +362,25 @@ Stage 10: Normalizer  (always PASS)
           Enricher    (always PASS, stub)
 ```
 
-Workers also short-circuit before Stage 1 if the `BoundedSemaphore` is exhausted:
+### TECHNICAL Path
+
+```
+Stage 1:  FileSizeValidator
+          MimeTypeValidator
+              ── BLOCK? → dead-letter
+
+Stage 4:  TextLengthValidator
+          TextQualityValidator
+          InjectionValidator
+              ── BLOCK? → dead-letter
+
+Stage 7:  KnowledgeSchemaValidator
+            ├─ json.loads (BLOCK on failure)
+            └─ KnowledgeExtraction.model_validate (BLOCK on failure)
+              ── BLOCK? → dead-letter
+```
+
+Workers also short-circuit before processing if the `BoundedSemaphore` is exhausted:
 
 ```
 Queue full → ValidationReport(validator="worker_pool", status="BLOCK",

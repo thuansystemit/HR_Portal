@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from domain.cv_schema import CvExtraction
+from domain.technical_schema import KnowledgeExtraction
 
 
 @dataclass
@@ -49,6 +50,7 @@ class PipelineContext:
     # validation / schema
     raw_dict: dict | None = None
     cv_data: CvExtraction | None = None
+    knowledge_data: KnowledgeExtraction | None = None
 
     # full audit trail
     reports: list[ValidationReport] = field(default_factory=list)
@@ -61,6 +63,7 @@ class ProcessingResult:
     status: Literal["PASS", "DEGRADED", "REJECTED", "ERROR"]
     cv_data: CvExtraction | None
     output_file: str | None
+    knowledge_data: KnowledgeExtraction | None = None
     reports: list[ValidationReport] = field(default_factory=list)
     error: str | None = None
 

@@ -241,4 +241,21 @@ class DocumentCategoryServiceTest {
                 new UpdateCategoryRequest("X", "X", DocumentType.CV, null, null)))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
+
+    @Test
+    void create_setsLlmExtractionTrue_whenExplicitlyTrue() {
+        // covers: llmExtraction() == null || llmExtraction() where not-null and true → true branch
+        var req = new CreateCategoryRequest("TechDocs", "desc", DocumentType.TECHNICAL, true, null);
+        var cat = DocumentCategory.builder().id(CAT_ID).name("TechDocs")
+                .documentType(DocumentType.TECHNICAL).documentCount(0).createdAt(Instant.now())
+                .llmExtraction(true).build();
+
+        when(categoryRepository.existsByNameIgnoreCaseAndDeletedAtIsNull("TechDocs")).thenReturn(false);
+        when(categoryRepository.save(any())).thenReturn(cat);
+        when(visibilityRepository.findByCategoryId(CAT_ID)).thenReturn(List.of());
+
+        var result = categoryService.create(req);
+
+        assertThat(result.llmExtraction()).isTrue();
+    }
 }

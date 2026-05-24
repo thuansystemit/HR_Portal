@@ -16,6 +16,7 @@ const ALL_NAV: NavItem[] = [
   { label: 'Users',               icon: 'bi-people',       route: '/users',     permission: 'usersView' },
   { label: 'Roles',               icon: 'bi-shield-lock',  route: '/roles',     permission: 'rolesView' },
   { label: 'Document Management', icon: 'bi-file-text',    route: '/documents' },
+  { label: 'Knowledge Base',      icon: 'bi-diagram-3',    route: '/knowledge' },
   { label: 'Reports',             icon: 'bi-bar-chart',    route: '/reports',   permission: 'rolesView' }
   // { label: 'Settings',            icon: 'bi-gear',         route: '/settings',  permission: 'rolesEdit' },
 ];

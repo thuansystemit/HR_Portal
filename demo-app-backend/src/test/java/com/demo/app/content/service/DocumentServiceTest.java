@@ -5,6 +5,7 @@ import com.demo.app.content.entity.DocumentCategory;
 import com.demo.app.content.entity.DocumentType;
 import com.demo.app.content.repository.DocumentCategoryRepository;
 import com.demo.app.content.repository.DocumentRepository;
+import com.demo.app.iam.repository.UserRepository;
 import com.demo.app.insights.service.ReportService;
 import com.demo.app.platform.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,7 @@ class DocumentServiceTest {
     @Mock DocumentCategoryRepository categoryRepository;
     @Mock StorageService storageService;
     @Mock ReportService reportService;
+    @Mock UserRepository userRepository;
 
     @InjectMocks
     DocumentService documentService;

@@ -7,10 +7,10 @@
 > Scope: Production-ready full-stack design that backs the existing demo UI
 
 > **Scope boundary:** This document covers the Angular 21 frontend and Spring Boot backend only.
-> The CV batch extraction service (`cv-batch-extractor`) is a separate Python microservice with its own dedicated documentation:
-> - [Architecture](cv_batch_extractor/ARCHITECTURE.md) — enterprise module structure, 10-stage pipeline, OCR/LLM adapters, worker pool
-> - [Domain Model](cv_batch_extractor/DOMAIN_MODEL.md) — PipelineContext, CvExtraction schema, settings reference
-> - [Guardrails Spec](cv_batch_extractor/GUARDRAILS_SPEC.md) — per-stage validators, status aggregation rules
+> The document batch extraction service (`cv-batch-extractor`) is a separate Python microservice with its own dedicated documentation:
+> - [Architecture](cv_batch_extractor/ARCHITECTURE.md) — enterprise module structure, CV + TECHNICAL pipeline paths, OCR/LLM adapters, worker pool
+> - [Domain Model](cv_batch_extractor/DOMAIN_MODEL.md) — PipelineContext, CvExtraction + KnowledgeExtraction schemas, settings reference
+> - [Guardrails Spec](cv_batch_extractor/GUARDRAILS_SPEC.md) — per-stage validators, status aggregation rules, TECHNICAL output validation
 
 ---
 
@@ -26,7 +26,7 @@
 | FR-4  | Users             | CRUD users; list with sort/filter/pagination matching `app-data-table`                                              | §5 User Management        |
 | FR-5  | Users             | Forbid `usersDelete` for non-Admin — server enforced; UI hides the button                                           | §5                        |
 | FR-6  | Roles             | CRUD roles, attach permission set; protect built-in roles from edit/delete                                          | §6 Role Management        |
-| FR-7  | Documents         | Manage document categories with per-role visibility (`canView`, `canUpload`, `canDelete`)                           | §7 Document Mgmt, §4 Dash |
+| FR-7  | Documents         | Manage document categories with per-role visibility (`canView`, `canUpload`, `canDelete`); types: CV, INVOICE, TECHNICAL | §7 Document Mgmt, §4 Dash |
 | FR-8  | Documents         | Upload (multipart), list paginated, preview, delete; enforce per-category permissions                               | §7                        |
 | FR-9  | Reports           | Aggregate: upload trend (12 months), docs per category, role distribution, storage by category                      | §8 Reports                |
 | FR-10 | Settings          | Persist per-user appearance/localization/table/notification settings; expose defaults; reset                        | §9 Settings               |
@@ -74,13 +74,15 @@ In scope (backend):
 - Per-user settings store.
 - Audit log.
 - Email/push/desktop notification dispatch.
-- CV ingest endpoint (`POST /api/v1/cv-candidates`) — receives structured extraction results from the CV batch extractor and updates `document.extractionStatus`.
+- CV ingest endpoint (`POST /api/v1/cv-candidates`) — receives structured CV extraction results from the batch extractor and updates `document.extractionStatus`.
+- Knowledge ingest endpoint (`POST /api/v1/knowledge/ingest`, `ROLE_SERVICE`) — receives knowledge entities and relationships extracted from TECHNICAL documents; persists to knowledge graph tables.
+- Knowledge query endpoints (`GET /api/v1/knowledge/entities`, `GET /api/v1/knowledge/entities/{id}`, `GET /api/v1/knowledge/entities/{id}/graph`) — serve knowledge graph data to the Angular Knowledge Base feature.
 
 Out of scope (frontend continues to own):
 - Highcharts rendering, `data-theme` application, dialog/UI choreography, route guards (UX), avatar rendering.
 
 Out of scope for this document (see linked docs):
-- CV text extraction pipeline, OCR adapters, LLM providers, guardrail validation — owned by the `cv-batch-extractor` Python microservice. Full specification in [`docs/cv_batch_extractor/`](cv_batch_extractor/ARCHITECTURE.md).
+- CV and TECHNICAL document extraction pipeline, OCR adapters, LLM providers, guardrail validation — owned by the `cv-batch-extractor` Python microservice. Full specification in [`docs/cv_batch_extractor/`](cv_batch_extractor/ARCHITECTURE.md).
 
 External systems: SMTP relay, Web Push gateway (VAPID), Identity Provider (future OIDC seam).
 
@@ -106,7 +108,7 @@ External systems: SMTP relay, Web Push gateway (VAPID), Identity Provider (futur
 |  - AuthN              |  - Document Categories   |  - Reports        |
 |  - AuthZ (RBAC)       |  - Documents (blobs)     |  - Aggregations   |
 |  - Users              |  - Preview rendering     |                   |
-|  - Roles              |                          |                   |
+|  - Roles              |  - Knowledge Base        |                   |
 +-----------------------+--------------------------+-------------------+
 | Personalization       | Platform                 | Compliance        |
 |  - Settings (per-user)|  - Notifications         |  - Audit Log      |
@@ -151,7 +153,8 @@ Justification: 10k concurrent is a load target, not a complexity signal. A well-
 | Notification Dispatcher  | Email (SMTP), Web Push (VAPID), in-app — fan-out from domain events                              | `platform.notif`    |
 | PgBouncer                | Connection pooler in transaction mode between API pods and PostgreSQL                            | Infra sidecar       |
 | Cache (Redis Cluster)    | Permission cache, report cache, rate-limit counters, event Streams                               | `platform.cache`    |
-| CV Batch Extractor       | Python microservice — watches upload volume, OCR → LLM → structured JSON → notifies backend via `POST /api/v1/cv-candidates`. See [cv_batch_extractor/ARCHITECTURE.md](cv_batch_extractor/ARCHITECTURE.md) | External sidecar |
+| Document Batch Extractor | Python microservice — watches upload volume, routes by document type (CV → `/api/v1/cv-candidates`, TECHNICAL → `/api/v1/knowledge/ingest`). OCR → LLM → guardrail validation → backend notification. See [cv_batch_extractor/ARCHITECTURE.md](cv_batch_extractor/ARCHITECTURE.md) | External sidecar |
+| Knowledge Module         | Spring Boot module — ingest (`POST /api/v1/knowledge/ingest`), entity search/detail/graph (`GET /api/v1/knowledge/entities/**`); stores to `knowledge_entities`, `knowledge_relationships`, `knowledge_entity_sources` | `knowledge` |
 
 ### 2.3 Data Ownership Map
 
@@ -163,6 +166,7 @@ Justification: 10k concurrent is a load target, not a complexity signal. A well-
 | `content.cats`      | `document_category`, `category_role_visibility`                  |
 | `content.docs`      | `document`, `document_acl`                                       |
 | `content.storage`   | (blobs — object store, not relational)                           |
+| `knowledge`         | `knowledge_entities`, `knowledge_relationships`, `knowledge_entity_sources` |
 | `insights`          | (read-only views over `content.*`, `iam.*`)                      |
 | `personal.settings` | `user_setting`                                                   |
 | `compliance`        | `audit_event`                                                    |
@@ -732,6 +736,9 @@ DR drill: quarterly restore-to-staging from snapshots; documented runbook in IT/
 | `category_role_visibility` | category_id (fk), role_id (fk), can_view, can_upload, can_delete                                                       | No  | Lifetime               |
 | `document`                 | id (uuid pk), category_id (fk), owner_id (fk), filename, mime, size_bytes, object_key, status, created_at              | No  | Per category policy    |
 | `document_acl`             | document_id (fk), user_id (fk), can_view, can_delete                                                                   | No  | While document active  |
+| `knowledge_entities`       | id (uuid pk), document_id (fk), entity_type (Technology/Concept/…), name, aliases (text[]), properties (jsonb), created_at | No  | Lifetime           |
+| `knowledge_relationships`  | id (uuid pk), source_id (fk), target_id (fk), relation_type, weight (float), UNIQUE(source,target,type)                | No  | Lifetime               |
+| `knowledge_entity_sources` | entity_id + document_id (composite pk), excerpt, page_number                                                           | No  | Lifetime               |
 | `user_setting`             | user_id (pk/fk), theme, language, date_format, page_size, notif_email, notif_push, notif_desktop                        | No  | While user active      |
 | `audit_event`              | id (uuid), occurred_at, actor_user_id (fk), action, resource_type, resource_id, ip, user_agent, payload (jsonb)        | No (IP borderline) | 1 year then archive |
 | `notification`             | id, user_id (fk), channel, payload, status, created_at                                                                  | No  | 90 days                |
@@ -902,6 +909,11 @@ PATCH  /profile                        { displayName }
 
 GET    /audit                          (Admin only)
 
+GET    /knowledge/entities             ?q=&type=&page=&size=  (trigram search + type filter)
+GET    /knowledge/entities/:id         entity detail + relationships + sources
+GET    /knowledge/entities/:id/graph   depth-1 neighbourhood nodes + edges
+POST   /knowledge/ingest               (ROLE_SERVICE via X-Internal-Api-Key — batch extractor only)
+
 GET    /actuator/health/liveness       (internal port — ECS liveness probe)
 GET    /actuator/health/readiness      (internal port — checks DB+Redis+S3)
 ```
@@ -954,22 +966,31 @@ noClasses().that().resideOutsideOfPackage("..iam.users..")
 
 ## Appendix D — Adjacent Services
 
-### CV Batch Extractor
+### Document Batch Extractor
 
-A standalone Python microservice that handles CV document extraction outside the Spring Boot process. It watches the upload volume, runs OCR and LLM extraction, validates the result through a guardrail pipeline, and calls back the backend via `POST /api/v1/cv-candidates`.
+A standalone Python microservice that handles CV and TECHNICAL document extraction outside the Spring Boot process. It watches the upload volume, routes by document type, runs OCR and LLM extraction, validates the result through a guardrail pipeline, and calls back the backend.
 
-**Integration point with this backend:**
+**Upload path convention:**
+```
+{upload_dir}/{documentType}/{categoryId}/{documentId}/{filename}
+             ^^^^^^^^^^^^
+             cv        → CV extraction path   → POST /api/v1/cv-candidates
+             technical → Knowledge graph path → POST /api/v1/knowledge/ingest
+```
 
-| Direction | Contract |
-|---|---|
-| Extractor → Backend | `POST /api/v1/cv-candidates` with `{ documentId, documentCategoryId, jsonFile, extractionStatus, guardrailWarnings }` |
-| Backend response | `201 Created` (PASS/DEGRADED with candidate) or `200 OK` (REJECTED/ERROR — document status set to FAILED) |
-| Backend side-effect | `document.extractionStatus` updated: `PASS`/`DEGRADED` → `COMPLETED`; `REJECTED`/`ERROR` → `FAILED` |
+**Integration points with this backend:**
+
+| Document type | Direction | Contract |
+|---|---|---|
+| CV | Extractor → Backend | `POST /api/v1/cv-candidates` with `{ documentId, documentCategoryId, jsonFile, extractionStatus, guardrailWarnings }` |
+| CV | Backend side-effect | `document.extractionStatus`: `PASS`/`DEGRADED` → `COMPLETED`; `REJECTED`/`ERROR` → `FAILED` |
+| TECHNICAL | Extractor → Backend | `POST /api/v1/knowledge/ingest` (`X-Internal-Api-Key` required) with `{ documentId, categoryId, extractionStatus, guardrailWarnings, documentType, title, summary, technologies, concepts, relationships }` |
+| TECHNICAL | Backend side-effect | Knowledge entities + relationships persisted; `document.extractionStatus` updated |
 
 **Dedicated documentation:**
 
 | Document | Path | Contents |
 |---|---|---|
-| Architecture | [cv_batch_extractor/ARCHITECTURE.md](cv_batch_extractor/ARCHITECTURE.md) | Enterprise module structure, 10-stage pipeline flow, OCR adapters, LLM adapters with circuit breaker, worker pool, monitoring |
-| Domain Model | [cv_batch_extractor/DOMAIN_MODEL.md](cv_batch_extractor/DOMAIN_MODEL.md) | `PipelineContext`, `ProcessingResult`, `CvExtraction` Pydantic schema, settings reference, OCR/LLM adapter contracts |
-| Guardrails Spec | [cv_batch_extractor/GUARDRAILS_SPEC.md](cv_batch_extractor/GUARDRAILS_SPEC.md) | Per-stage validators (file size, MIME type, text length/quality, injection, JSON parse, schema, confidence, hallucination, normalisation), status aggregation rules |
+| Architecture | [cv_batch_extractor/ARCHITECTURE.md](cv_batch_extractor/ARCHITECTURE.md) | CV + TECHNICAL pipeline paths, OCR adapters, LLM adapters with circuit breaker, worker pool, dual backend notification |
+| Domain Model | [cv_batch_extractor/DOMAIN_MODEL.md](cv_batch_extractor/DOMAIN_MODEL.md) | `PipelineContext`, `ProcessingResult`, `CvExtraction` + `KnowledgeExtraction` Pydantic schemas, settings reference, OCR/LLM adapter contracts |
+| Guardrails Spec | [cv_batch_extractor/GUARDRAILS_SPEC.md](cv_batch_extractor/GUARDRAILS_SPEC.md) | Per-stage validators for both document types, TECHNICAL knowledge schema validator, status aggregation rules |

@@ -52,6 +52,11 @@ export const routes: Routes = [
           import('./features/cv-candidates/cv-candidates.routes').then(m => m.CV_CANDIDATES_ROUTES),
       },
       {
+        path: 'knowledge',
+        loadChildren: () =>
+          import('./features/knowledge/knowledge.routes').then(m => m.KNOWLEDGE_ROUTES),
+      },
+      {
         path: 'profile',
         loadChildren: () =>
           import('./features/profile/profile-routes.routes').then(m => m.PROFILE_ROUTES),

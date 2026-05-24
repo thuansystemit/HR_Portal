@@ -1,0 +1,72 @@
+<app-page-layout title="Knowledge Base" subtitle="Browse and search extracted knowledge entities from your documents.">
+
+  <!-- Search bar -->
+  <div class="row g-2 mb-3">
+    <div class="col-12 col-md-6">
+      <div class="input-group">
+        <input
+          type="text"
+          class="form-control"
+          placeholder="Search entities..."
+          [(ngModel)]="q"
+          (keyup.enter)="page.set(1); doSearch()"
+        />
+        <button class="btn btn-primary" type="button" (click)="page.set(1); doSearch()">
+          <i class="bi bi-search"></i>
+        </button>
+      </div>
+    </div>
+    <div class="col-12 col-md-3">
+      <select class="form-select" [(ngModel)]="selectedType" (change)="page.set(1); doSearch()">
+        <option value="">All Types</option>
+        @for (type of entityTypes; track type) {
+          <option [value]="type">{{ type }}</option>
+        }
+      </select>
+    </div>
+  </div>
+
+  @if (store.error()) {
+    <div class="alert alert-danger">{{ store.error() }}</div>
+  }
+
+  <app-data-table
+    [columns]="columns()"
+    [data]="store.entities()"
+    [loading]="store.loading()"
+    [pageSize]="pageSize"
+    [showPagination]="false"
+    [controlledPage]="page()"
+    emptyMessage="No knowledge entities found."
+  />
+
+  <app-divider spacing="sm" thickness="0px" />
+
+  <app-pagination
+    [page]="page()"
+    [pageCount]="pageCount()"
+    [total]="store.totalElements()"
+    [pageSize]="pageSize"
+    (pageChange)="onPageChange($event)"
+  />
+
+</app-page-layout>
+
+<!-- Type badge template -->
+<ng-template #typeTpl let-value>
+  <span class="badge" [ngClass]="entityTypeBadgeClass(value)">{{ value }}</span>
+</ng-template>
+
+<!-- Actions cell template -->
+<ng-template #actionsTpl let-row="row">
+  <div class="d-flex justify-content-center gap-2">
+    <app-btn
+      size="sm"
+      variant="outline-info"
+      icon="bi-eye"
+      [iconOnly]="true"
+      title="View Entity"
+      (btnClick)="viewEntity(row)"
+    />
+  </div>
+</ng-template>

@@ -1,4 +1,4 @@
-# CV Batch Extractor — Enterprise Architecture
+# Document Batch Extractor — Enterprise Architecture
 
 ## 1. Design Principles
 
@@ -35,115 +35,74 @@ The backend always receives a callback regardless of outcome. The `extractionSta
 
 ---
 
-## 3. Full Pipeline Flow (10 Stages)
+## 3. Full Pipeline Flow
+
+The pipeline branches at dispatch time based on the document type encoded in the upload path (`cv/` vs `technical/`). Both paths share the same input validation and OCR stages; they diverge at LLM extraction and backend notification.
 
 ```
 File created on disk  (ingestion/file_watcher/watcher.py)
-        │
+        │  path: {upload_dir}/{documentType}/{categoryId}/{documentId}/{filename}
+        │  routed types: cv, technical
         ▼
-WorkerPool.submit(document_id, category_id, file_path)
+WorkerPool.submit(document_id, category_id, file_path, document_type)
     ← bounded semaphore; capacity = max_workers + queue_size
     ← if full → dead-letter QUEUE_FULL + notify backend immediately
         │
         ▼
-ExtractionPipeline.run(document_id, category_id, file_path)
+ExtractionPipeline.run(document_id, category_id, file_path, document_type)
         │
-        ▼
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- STAGE 1 — Document Classification
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  DocumentClassifier.classify(file_path)
-  → ctx.document_type = "pdf" | "docx" | "doc" | "image" | "unknown"
-        │
-        ▼
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- STAGE 2 — File Input Validation
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  FileSizeValidator    → BLOCK if > max_file_size_mb
-  MimeTypeValidator    → BLOCK if magic bytes ≠ allowed_mime_types
-  ─ if BLOCK → skip to ResultBuilder
-        │
-        ▼
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- STAGE 3 — Preprocessing
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  PreprocessingPipeline.process(file_path, document_type)
-  → image:    enhance → deskew → denoise
-  → doc/docx: FormatConverter (LibreOffice) → PDF
-  → ctx.preprocessed_path
-        │
-        ▼
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- STAGE 4 — OCR
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  OCRAdapter.extract(preprocessed_path)   [factory: ocr_factory.create(settings.ocr_engine)]
-  → liteparser:   LiteParser CLI → builtin fallback (PyMuPDF / python-docx / pytesseract)
-  → paddleocr:    PaddleOCR engine
-  → tesseract:    pytesseract + PyMuPDF page renderer
-  → ctx.raw_text, ctx.ocr_confidence
-        │
-        ▼
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- STAGE 5 — Text Input Validation
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  TextLengthValidator  → BLOCK if < min_text_chars; WARN + truncate if > max_text_chars
-  TextQualityValidator → WARN if word_count < min_word_count or printable_ratio < threshold
-  InjectionValidator   → WARN + redact if LLM-override patterns detected → ctx.prompt_text
-  ─ if BLOCK → skip to ResultBuilder
-        │
-        ▼
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- STAGE 6 — Layout, Entity & Metadata Extraction
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  LayoutAnalyzer.analyze()     → ctx.layout
-  TableExtractor.extract()     → ctx.tables
-  EntityExtractor.extract()    → ctx.entities  (email, phone via regex)
-  MetadataExtractor.extract()  → ctx.doc_metadata  (PyMuPDF metadata)
-        │
-        ▼
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- STAGE 7 — Chunking
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  TextChunker.chunk(prompt_text or raw_text)
-  → ctx.chunks  (chunk_size / chunk_overlap from settings)
-  Available: TextChunker (fixed-size), SemanticChunker (section headings), PageChunker (form-feeds)
-        │
-        ▼
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- STAGE 8 — LLM Extraction  (circuit breaker guarded)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  LLMAdapter.complete(prompt)   [factory: llm_factory.create(settings.llm_provider)]
-  → ollama:       OllamaAdapter with CircuitBreaker (CLOSED/OPEN/HALF-OPEN)
-  → openai:       OpenAIAdapter
-  → azure_openai: AzureOpenAIAdapter
-  → anthropic:    AnthropicAdapter
-  → ctx.llm_raw
-        │
-        ▼
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- STAGE 9 — Output Validation
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  SchemaValidator.validate(ctx)       → BLOCK on hard schema failure; WARN on soft
-    ├─ JsonParseStep  → ctx.raw_dict   (BLOCK if LLM output cannot be parsed)
-    └─ ModelValidateStep → ctx.cv_data (CvExtraction Pydantic model)
-  ConfidenceScorer.validate(ctx)      → WARN on MEDIUM/LOW/absent confidence
-  HallucinationChecker.validate(ctx)  → WARN on grounding failures (name, email, GPA, dates)
-  ─ if BLOCK → skip to ResultBuilder
-        │
-        ▼
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- STAGE 10 — Normalisation & Enrichment
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Normalizer.normalize(ctx)   → strip control chars, collapse newlines, cap field lengths
-  Enricher.enrich(ctx)        → (stub) geocoding, skill taxonomy tagging
-        │
-        ▼
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- RESULT BUILDER
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        ├─── document_type == "CV" ──────────────────────────────────────────────────┐
+        │                                                                            │
+        ▼                                                                            ▼
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ CV PATH (_run_stages)                             TECHNICAL PATH (_run_stages_technical)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ STAGE 1 — Document Classification                 (skipped — type known from path)
+   ctx.document_type = "pdf"|"docx"|"image"|…
+
+ STAGE 2 — File Input Validation                   STAGE 1 — File Input Validation
+   FileSizeValidator  → BLOCK if > max MB             (same validators)
+   MimeTypeValidator  → BLOCK if not allowed MIME
+
+ STAGE 3 — Preprocessing                           STAGE 2 — Preprocessing
+   image: enhance → deskew → denoise                 (same pipeline, type="technical")
+   doc/docx: LibreOffice → PDF
+
+ STAGE 4 — OCR                                     STAGE 3 — OCR
+   OCRAdapter.extract()                               (same adapters)
+   → ctx.raw_text, ctx.ocr_confidence
+
+ STAGE 5 — Text Input Validation                   STAGE 4 — Text Input Validation
+   TextLengthValidator                                (same validators)
+   TextQualityValidator
+   InjectionValidator → ctx.prompt_text
+
+ STAGE 6 — Layout, Entity & Metadata               (skipped for TECHNICAL)
+   LayoutAnalyzer, TableExtractor,
+   EntityExtractor, MetadataExtractor
+
+ STAGE 7 — Chunking                                STAGE 5 — Chunking
+   TextChunker.chunk()                                TextChunker.chunk()
+
+ STAGE 8 — LLM Extraction (CV prompt)              STAGE 6 — LLM Extraction (technical prompt)
+   prompt_templates/cv_extraction.py                  prompt_templates/technical_extraction.py
+   → ctx.llm_raw                                      → ctx.llm_raw
+
+ STAGE 9 — Output Validation (CV schema)           STAGE 7 — Output Validation (knowledge schema)
+   SchemaValidator (json_parse + CvExtraction)        json.loads → KnowledgeExtraction.model_validate
+   ConfidenceScorer                                   BLOCK on parse / Pydantic failure
+   HallucinationChecker                               → ctx.knowledge_data
+
+ STAGE 10 — Normalisation & Enrichment             (skipped for TECHNICAL)
+   Normalizer, Enricher
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ RESULT BUILDER (shared)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   - Aggregate status from all ValidationReports
-  - Write JSON file to output_dir (PASS or DEGRADED only)
-  - Notify backend via POST /api/v1/cv-candidates (always)
+  - CV:        write cv_{name}_{id}.json  (PASS/DEGRADED) → notify POST /api/v1/cv-candidates
+  - TECHNICAL: write tech_{title}_{id}.json (PASS/DEGRADED) → notify POST /api/v1/knowledge/ingest
   - Append to dead_letter.ndjson (REJECTED or ERROR only)
 ```
 
@@ -168,15 +127,18 @@ Config knobs: `cb_failure_threshold`, `cb_window_seconds`, `cb_cooldown_seconds`
 
 ```
 Watcher event thread
-    │ submit(document_id, category_id, file_path)
+    │ submit(document_id, category_id, file_path, document_type)
     ▼
 BoundedSemaphore  (capacity = max_workers + queue_size)
     │  if acquire fails → dead-letter QUEUE_FULL + notify backend immediately
     ▼
 ThreadPoolExecutor  (max_workers)
-    │  each worker thread runs ExtractionPipeline.run()
+    │  each worker thread runs ExtractionPipeline.run(…, document_type)
     ▼
-orchestration._process_task()  →  _notify_backend()  →  _dead_letter() (if needed)
+orchestration._process_task()
+    ├─ document_type == "CV"        → _notify_cv_backend()
+    └─ document_type == "TECHNICAL" → _notify_knowledge_backend()
+    └─ _dead_letter() (if REJECTED or ERROR)
 ```
 
 The watchdog event handler is always non-blocking. Processing is on worker threads. Both `worker_max_workers` and `worker_queue_size` are environment-variable config.
@@ -192,9 +154,10 @@ cv-batch-extractor/
 │   └── settings.py                      # Pydantic BaseSettings — all knobs via env vars
 ├── domain/
 │   ├── cv_schema.py                     # CvExtraction Pydantic model + nested types
+│   ├── technical_schema.py              # KnowledgeExtraction + TechEntity, ConceptEntity, Relationship
 │   └── models.py                        # PipelineContext, ProcessingResult, ValidationReport
 ├── ingestion/
-│   ├── file_watcher/watcher.py          # Watchdog observer — emits events to WorkerPool
+│   ├── file_watcher/watcher.py          # Watchdog observer — routes cv/ and technical/ paths
 │   ├── document_classifier/classifier.py # python-magic + extension fallback
 │   └── upload_service/service.py        # (stub) multipart upload helper
 ├── preprocessing/
@@ -228,20 +191,22 @@ cv-batch-extractor/
 │   ├── openai_adapter.py                # OpenAIAdapter
 │   ├── azure_openai_adapter.py          # AzureOpenAIAdapter
 │   ├── anthropic_adapter.py             # AnthropicAdapter
-│   └── prompt_templates/cv_extraction.py # build(text) → prompt string
+│   └── prompt_templates/
+│       ├── cv_extraction.py             # CV extraction prompt — build(text) → str
+│       └── technical_extraction.py      # Knowledge graph extraction prompt — build(text) → str
 ├── validation/
-│   ├── schema_validator.py              # JSON parse + Pydantic model_validate
-│   ├── confidence_scoring.py            # HIGH/MEDIUM/LOW/absent scoring
-│   └── hallucination_checker.py         # name/email grounding, GPA, future dates
+│   ├── schema_validator.py              # JSON parse + Pydantic model_validate (CV only)
+│   ├── confidence_scoring.py            # HIGH/MEDIUM/LOW/absent scoring (CV only)
+│   └── hallucination_checker.py         # name/email grounding, GPA, future dates (CV only)
 ├── postprocessing/
-│   ├── normalization/normalizer.py      # strip control chars, cap field lengths
-│   ├── enrichment/enricher.py           # (stub) geocoding, skill tagging
+│   ├── normalization/normalizer.py      # strip control chars, cap field lengths (CV only)
+│   ├── enrichment/enricher.py           # (stub) geocoding, skill tagging (CV only)
 │   └── data_mapping/mapper.py           # (stub) field remapping
 ├── storage/
 │   └── vector_db/client.py              # (stub) Qdrant/pgvector embedding store
 ├── workflow/
-│   ├── extraction_pipeline.py           # ExtractionPipeline — 10-stage orchestrator
-│   ├── orchestration.py                 # WorkerPool + _notify_backend + _dead_letter
+│   ├── extraction_pipeline.py           # ExtractionPipeline — CV + TECHNICAL paths
+│   ├── orchestration.py                 # WorkerPool + _notify_cv_backend + _notify_knowledge_backend + _dead_letter
 │   └── retry_handler.py                 # exponential backoff decorator
 ├── monitoring/
 │   ├── logging/setup.py                 # configure(level, fmt) — text or JSON
@@ -255,9 +220,11 @@ cv-batch-extractor/
 
 ---
 
-## 7. Backend Notification Contract
+## 7. Backend Notification Contracts
 
-POST `/api/v1/cv-candidates` — always called regardless of outcome:
+### 7.1 CV Documents — POST `/api/v1/cv-candidates`
+
+Always called regardless of outcome:
 
 ```json
 {
@@ -272,10 +239,37 @@ POST `/api/v1/cv-candidates` — always called regardless of outcome:
 }
 ```
 
-`jsonFile` is `null` when `extractionStatus` is `REJECTED` or `ERROR`.  
-`guardrailWarnings` is `[]` when `extractionStatus` is `PASS`.
+`jsonFile` is `null` when `extractionStatus` is `REJECTED` or `ERROR`.
 
-The backend maps extractor statuses to document lifecycle statuses:
+### 7.2 Technical Documents — POST `/api/v1/knowledge/ingest`
+
+Always called regardless of outcome. Requires `X-Internal-Api-Key` header (`ROLE_SERVICE`):
+
+```json
+{
+  "documentId": "uuid",
+  "categoryId": "uuid",
+  "extractionStatus": "PASS | DEGRADED | REJECTED | ERROR",
+  "guardrailWarnings": [],
+  "documentType": "TECHNICAL",
+  "title": "Microservices Architecture Overview",
+  "summary": "Describes the service decomposition and inter-service communication patterns.",
+  "technologies": [
+    { "name": "PostgreSQL", "version": "16", "category": "database", "aliases": ["Postgres"] },
+    { "name": "Spring Boot", "version": "3.3", "category": "framework", "aliases": [] }
+  ],
+  "concepts": [
+    { "name": "Circuit Breaker", "definition": "Fault-tolerance pattern that stops cascading failures.", "relatedConcepts": ["Retry", "Bulkhead"] }
+  ],
+  "relationships": [
+    { "source": "Spring Boot", "target": "PostgreSQL", "relationType": "stores_in", "weight": 1.0 }
+  ]
+}
+```
+
+On `REJECTED` or `ERROR`, `technologies`, `concepts`, and `relationships` are empty arrays; the backend marks the document `FAILED`.
+
+### 7.3 Status Mapping (both document types)
 
 | Extractor status | Document.extractionStatus |
 |---|---|

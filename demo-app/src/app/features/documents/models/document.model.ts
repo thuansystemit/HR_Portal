@@ -1,8 +1,9 @@
-export type DocumentType = 'CV' | 'INVOICE';
+export type DocumentType = 'CV' | 'INVOICE' | 'TECHNICAL';
 
 export const DOCUMENT_TYPE_OPTIONS: { value: DocumentType; label: string }[] = [
-  { value: 'CV',      label: 'CV'      },
-  { value: 'INVOICE', label: 'Invoice' },
+  { value: 'CV',        label: 'CV'                },
+  { value: 'INVOICE',   label: 'Invoice'            },
+  { value: 'TECHNICAL', label: 'Technical Document' },
 ];
 
 export interface CategoryRolePermission {

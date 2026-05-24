@@ -203,8 +203,8 @@ class CvCandidateServiceTest {
     @Test
     void ingest_throws_whenPathTraversalDetected() {
         ReflectionTestUtils.setField(cvCandidateService, "outputDir", "/tmp/test-output");
-        // "../etc/passwd" resolves outside /tmp/test-output
-        var request = new IngestCvRequest(DOC_ID, CAT_ID, "..etc-passwd.json", null, null);
+        // "../secret.json" normalizes to /tmp/secret.json which is outside /tmp/test-output
+        var request = new IngestCvRequest(DOC_ID, CAT_ID, "../secret.json", null, null);
 
         assertThatThrownBy(() -> cvCandidateService.ingest(request))
                 .isInstanceOf(IllegalArgumentException.class)

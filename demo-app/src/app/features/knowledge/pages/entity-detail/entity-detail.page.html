@@ -1,0 +1,177 @@
+<app-page-layout
+  [title]="entity()?.name ?? 'Entity Detail'"
+  subtitle="Knowledge entity details."
+>
+  <ng-container actions>
+    <button class="btn btn-sm btn-outline-secondary" (click)="goBack()">
+      <i class="bi bi-arrow-left me-1"></i> Back to Knowledge Base
+    </button>
+  </ng-container>
+
+  @if (store.loading()) {
+    <div class="d-flex justify-content-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading…</span>
+      </div>
+    </div>
+  }
+
+  @if (store.error()) {
+    <div class="alert alert-danger">{{ store.error() }}</div>
+  }
+
+  @if (entity(); as e) {
+
+    <!-- ── Info card ──────────────────────────────────────────────────────── -->
+    <div class="card mb-4">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-info-circle me-2"></i>Entity Information
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+
+          <div class="col-12 col-md-6">
+            <div class="text-muted small mb-1">Name</div>
+            <div class="fw-bold fs-5">{{ e.name }}</div>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <div class="text-muted small mb-1">Type</div>
+            <span class="badge fs-6 px-3 py-2" [ngClass]="entityTypeColor(e.entityType)">
+              {{ e.entityType }}
+            </span>
+          </div>
+
+          @if (e.aliases && e.aliases.length > 0) {
+            <div class="col-12">
+              <div class="text-muted small mb-1">Aliases</div>
+              <div class="d-flex flex-wrap gap-1">
+                @for (alias of e.aliases; track alias) {
+                  <span class="badge bg-light text-dark border px-3 py-2">{{ alias }}</span>
+                }
+              </div>
+            </div>
+          }
+
+          <div class="col-12 col-md-6">
+            <div class="text-muted small mb-1">Added</div>
+            <div>{{ e.createdAt | appDate }}</div>
+          </div>
+
+          @if (propertiesEntries(e.properties).length > 0) {
+            <div class="col-12">
+              <div class="text-muted small mb-2">Properties</div>
+              <table class="table table-sm table-bordered w-auto mb-0">
+                <tbody>
+                  @for (prop of propertiesEntries(e.properties); track prop.key) {
+                    <tr>
+                      <th class="text-muted fw-normal pe-3" style="white-space: nowrap;">{{ prop.key }}</th>
+                      <td>{{ prop.value }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Relationships card ─────────────────────────────────────────────── -->
+    @if (e.relationships && e.relationships.length > 0) {
+      <div class="card mb-4">
+        <div class="card-header fw-semibold">
+          <i class="bi bi-diagram-3 me-2"></i>Relationships
+          <span class="badge bg-secondary ms-2">{{ e.relationships.length }}</span>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Direction</th>
+                  <th>Related Entity</th>
+                  <th>Relation Type</th>
+                  <th class="text-end">Weight</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (rel of e.relationships; track rel.id) {
+                  <tr>
+                    <td>
+                      @if (rel.direction === 'OUTGOING') {
+                        <span class="badge bg-info">
+                          <i class="bi bi-arrow-right me-1"></i>Outgoing
+                        </span>
+                      } @else {
+                        <span class="badge bg-warning text-dark">
+                          <i class="bi bi-arrow-left me-1"></i>Incoming
+                        </span>
+                      }
+                    </td>
+                    <td>
+                      <a [routerLink]="['/knowledge', rel.otherEntityId]" class="text-decoration-none">
+                        {{ rel.otherEntityName }}
+                      </a>
+                    </td>
+                    <td>
+                      <span class="badge bg-light text-dark border">{{ rel.relationType }}</span>
+                    </td>
+                    <td class="text-end text-muted">{{ rel.weight | number:'1.1-2' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ── Sources card ───────────────────────────────────────────────────── -->
+    @if (e.sources && e.sources.length > 0) {
+      <div class="card mb-4">
+        <div class="card-header fw-semibold">
+          <i class="bi bi-file-earmark-text me-2"></i>Sources
+          <span class="badge bg-secondary ms-2">{{ e.sources.length }}</span>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Document ID</th>
+                  <th>Excerpt</th>
+                  <th class="text-end">Page</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (src of e.sources; track src.documentId) {
+                  <tr>
+                    <td>
+                      <code class="small">{{ src.documentId }}</code>
+                    </td>
+                    <td>
+                      @if (src.excerpt) {
+                        <span class="small text-muted" style="max-width: 400px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" [title]="src.excerpt">
+                          {{ src.excerpt }}
+                        </span>
+                      } @else {
+                        <span class="text-muted small">—</span>
+                      }
+                    </td>
+                    <td class="text-end text-muted">
+                      {{ src.pageNumber ?? '—' }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    }
+
+  }
+
+</app-page-layout>

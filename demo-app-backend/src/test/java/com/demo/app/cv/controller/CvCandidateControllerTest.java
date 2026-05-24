@@ -89,6 +89,17 @@ class CvCandidateControllerTest {
     }
 
     @Test
+    void ingest_returnsOk_whenServiceReturnsNull() {
+        var request = new IngestCvRequest(DOC_ID, CAT_ID, null, "REJECTED", null);
+        when(cvCandidateService.ingest(request)).thenReturn(null);
+
+        var result = cvCandidateController.ingest(request);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(result.getBody()).isNull();
+    }
+
+    @Test
     void delete_returns204() {
         var result = cvCandidateController.delete(CANDIDATE_ID);
 

@@ -50,8 +50,8 @@
       <div class="invalid-feedback">Document type is required.</div>
     </div>
 
-    <!-- LLM Extraction (CV only) -->
-    @if (isCvType) {
+    <!-- LLM Extraction (CV and TECHNICAL) -->
+    @if (isExtractableType) {
       <div class="col-12">
         <div class="form-check form-switch">
           <input
@@ -67,9 +67,9 @@
         </div>
         <small class="text-muted">
           @if (form.get('llmExtraction')?.value) {
-            AI extracts structured data (name, experience, skills…) from the CV.
+            AI extracts structured data automatically from the document.
           } @else {
-            Raw text only — faster, no AI call. Suitable for archival or manual review.
+            Raw text only — no AI extraction. Suitable for archival or manual review.
           }
         </small>
       </div>
