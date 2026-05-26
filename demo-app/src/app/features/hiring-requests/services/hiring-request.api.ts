@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { HiringRequest, CreateHiringRequestDto } from '../models/hiring-request.model';
@@ -29,5 +29,11 @@ export class HiringRequestApi {
     const body: Record<string, string> = { status };
     if (jobPostingId) body['jobPostingId'] = jobPostingId;
     return this.http.patch<HiringRequest>(`${this.base}/${id}/status`, body);
+  }
+
+  linkJobPosting(requestId: string, jobPostingId: string): Observable<HiringRequest> {
+    return this.http.patch<HiringRequest>(`${this.base}/${requestId}/link-posting`, null, {
+      params: new HttpParams().set('jobPostingId', jobPostingId),
+    });
   }
 }

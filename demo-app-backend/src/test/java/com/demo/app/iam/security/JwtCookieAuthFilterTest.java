@@ -92,6 +92,27 @@ class JwtCookieAuthFilterTest {
     }
 
     @Test
+    void doFilter_setsRoleIdInDetails_whenRoleIdClaimPresent() throws ServletException, IOException {
+        String userId = UUID.randomUUID().toString();
+        String roleId = UUID.randomUUID().toString();
+        request.setCookies(new Cookie("access-token", "token.with.role"));
+
+        Claims claims = new DefaultClaims(Map.of(
+                "sub", userId,
+                "roleId", roleId
+        ));
+        when(jwtService.validateAndParse("token.with.role")).thenReturn(claims);
+
+        filter.doFilterInternal(request, response, chain);
+
+        var auth = (UsernamePasswordAuthenticationToken) SecurityContextHolder.getContext().getAuthentication();
+        assertThat(auth).isNotNull();
+        @SuppressWarnings("unchecked")
+        var details = (java.util.Map<String, String>) auth.getDetails();
+        assertThat(details.get("roleId")).isEqualTo(roleId);
+    }
+
+    @Test
     void doFilter_skips_whenAuthenticationAlreadySet() throws ServletException, IOException {
         // Pre-set an existing authentication
         var existingAuth = new UsernamePasswordAuthenticationToken("existing-user", null, List.of());

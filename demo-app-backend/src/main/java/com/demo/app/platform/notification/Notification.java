@@ -1,19 +1,20 @@
-package com.demo.app.recruitment.entity;
+package com.demo.app.platform.notification;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "interviews")
+@Table(name = "notifications")
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Interview {
+public class Notification {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -21,24 +22,21 @@ public class Interview {
     private UUID id;
 
     @Column(nullable = false)
-    private UUID applicationId;
+    private UUID recipientId;
 
-    @Column
-    private UUID interviewerId;
-
-    @Column(nullable = false)
-    private Instant scheduledAt;
-
-    @Column(length = 500)
-    private String meetingLink;
+    @Column(nullable = false, length = 200)
+    private String title;
 
     @Column(columnDefinition = "TEXT")
-    private String notes;
-
-    @Column(nullable = false)
-    private UUID createdBy;
+    private String body;
 
     @Builder.Default
+    @Column(nullable = false)
+    private boolean isRead = false;
+
+    @CreationTimestamp
     @Column(nullable = false, updatable = false)
-    private Instant createdAt = Instant.now();
+    private Instant createdAt;
+
+    private Instant readAt;
 }

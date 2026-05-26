@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Query parameters for the CV candidate search endpoint.
@@ -19,7 +20,8 @@ public record CvSearchCriteria(
         @Min(0) int page,
         @Min(1) @Max(100) int size,
         @Pattern(regexp = "relevanceScore|fullName|experienceYears")
-        String sortBy
+        String sortBy,
+        UUID forJobPostingId
 ) {
 
     /**
@@ -28,7 +30,8 @@ public record CvSearchCriteria(
     public static CvSearchCriteria withDefaults(
             String skills, String title, String location,
             Integer minYearsExperience, String keyword,
-            Integer page, Integer size, String sortBy
+            Integer page, Integer size, String sortBy,
+            UUID forJobPostingId
     ) {
         List<String> skillList = (skills == null || skills.isBlank())
                 ? List.of()
@@ -45,7 +48,8 @@ public record CvSearchCriteria(
                 trimToNull(keyword),
                 page == null ? 0 : page,
                 size == null ? 20 : Math.min(size, 100),
-                sortBy == null ? "relevanceScore" : sortBy
+                sortBy == null ? "relevanceScore" : sortBy,
+                forJobPostingId
         );
     }
 
@@ -76,5 +80,9 @@ public record CvSearchCriteria(
 
     public boolean hasAnyCriteria() {
         return hasSkills() || hasTitle() || hasLocation() || hasMinExperience() || hasKeyword();
+    }
+
+    public boolean hasForJobPostingId() {
+        return forJobPostingId != null;
     }
 }

@@ -91,6 +91,23 @@ class HiringRequestControllerTest {
         assertThat(result.getBody()).isEqualTo(response);
     }
 
+    @Test
+    void linkPosting_returns200_withLinkedJobPosting() {
+        UUID jobPostingId = UUID.randomUUID();
+        when(authentication.getName()).thenReturn(REQUESTER_ID.toString());
+        var response = new HiringRequestResponse(
+                REQUEST_ID, REQUESTER_ID, "Jane HR",
+                "Senior Backend Dev", "Desc", "ENGINEER", "Engineering",
+                "HIGH", "IN_PROGRESS", jobPostingId, Instant.now(), Instant.now());
+        when(hiringRequestService.linkJobPosting(REQUEST_ID, jobPostingId, REQUESTER_ID)).thenReturn(response);
+
+        var result = controller.linkPosting(REQUEST_ID, jobPostingId, authentication);
+
+        assertThat(result.getStatusCode().value()).isEqualTo(200);
+        assertThat(result.getBody().status()).isEqualTo("IN_PROGRESS");
+        assertThat(result.getBody().jobPostingId()).isEqualTo(jobPostingId);
+    }
+
     private HiringRequestResponse buildResponse() {
         return new HiringRequestResponse(
                 REQUEST_ID, REQUESTER_ID, "Jane HR",

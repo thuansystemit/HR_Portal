@@ -56,4 +56,13 @@ public class HiringRequestController {
         UUID updatedBy = UUID.fromString(authentication.getName());
         return ResponseEntity.ok(hiringRequestService.updateStatus(id, request, updatedBy));
     }
+
+    @PatchMapping("/{id}/link-posting")
+    public ResponseEntity<HiringRequestResponse> linkPosting(
+            @PathVariable UUID id,
+            @RequestParam UUID jobPostingId,
+            Authentication authentication) {
+        UUID updatedBy = UUID.fromString(authentication.getName());
+        return ResponseEntity.ok(hiringRequestService.linkJobPosting(id, jobPostingId, updatedBy));
+    }
 }

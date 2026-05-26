@@ -1,6 +1,7 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormBuilder, Validators } from '@angular/forms';
+import { switchMap } from 'rxjs/operators';
 import { SHARED_IMPORTS } from '../../../../shared/shared.imports';
 import { DropdownOption } from '../../../../shared/components/dropdown/dropdown.model';
 import { RecruitmentStore } from '../../store/recruitment.store';
@@ -23,6 +24,9 @@ export class JobFormPage implements OnInit {
   protected editId: string | null = null;
   protected get isEdit() { return this.editId !== null; }
 
+  protected skillTags  = signal<string[]>([]);
+  protected skillInput = signal('');
+
   protected form = this.fb.group({
     title:        ['', [Validators.required, Validators.minLength(2)]],
     department:   [''],
@@ -44,6 +48,9 @@ export class JobFormPage implements OnInit {
     if (id && id !== 'new') {
       this.editId = id;
       this.store.loadPosting(id);
+      this.api.getPostingSkills(id).subscribe({
+        next: skills => this.skillTags.set(skills.map(s => s.skillName)),
+      });
     } else {
       this.store.clearCurrentPosting();
       this.form.patchValue({ status: 'DRAFT' });
@@ -67,6 +74,7 @@ export class JobFormPage implements OnInit {
 
   protected submit(): void {
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
+    if (this.skillInput().trim()) this.addSkillTag();
 
     const raw = this.form.getRawValue();
     const body = {
@@ -78,14 +86,19 @@ export class JobFormPage implements OnInit {
       deadline:     raw.deadline || undefined,
       status:       raw.status ?? 'DRAFT',
     };
+    const skills = this.skillTags().map(s => ({ skillName: s, isRequired: true }));
 
     if (this.isEdit) {
-      this.api.updatePosting(this.editId!, body).subscribe({
+      this.api.updatePosting(this.editId!, body).pipe(
+        switchMap(() => this.api.setPostingSkills(this.editId!, skills)),
+      ).subscribe({
         next: () => this.router.navigate(['/recruitment']),
         error: err => this.store['_error'].set(err.error?.message || 'Update failed'),
       });
     } else {
-      this.api.createPosting(body).subscribe({
+      this.api.createPosting(body).pipe(
+        switchMap(posting => this.api.setPostingSkills(posting.id, skills)),
+      ).subscribe({
         next: () => this.router.navigate(['/recruitment']),
         error: err => this.store['_error'].set(err.error?.message || 'Create failed'),
       });
@@ -95,5 +108,24 @@ export class JobFormPage implements OnInit {
   protected isInvalid(field: string): boolean {
     const ctrl = this.form.get(field);
     return !!(ctrl?.invalid && ctrl.touched);
+  }
+
+  protected addSkillTag(): void {
+    const val = this.skillInput().trim();
+    if (val && !this.skillTags().includes(val)) {
+      this.skillTags.update(tags => [...tags, val]);
+    }
+    this.skillInput.set('');
+  }
+
+  protected removeSkillTag(tag: string): void {
+    this.skillTags.update(tags => tags.filter(t => t !== tag));
+  }
+
+  protected onSkillKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' || event.key === ',') {
+      event.preventDefault();
+      this.addSkillTag();
+    }
   }
 }

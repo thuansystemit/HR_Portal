@@ -10,6 +10,7 @@ export interface CvSearchParams {
   page?: number;
   size?: number;
   sortBy?: 'relevanceScore' | 'fullName' | 'experienceYears';
+  forJobPostingId?: string;
 }
 
 /**
@@ -27,6 +28,7 @@ export interface CvSearchResult {
   relevanceScore: number;
   documentId: string;
   documentCategoryId: string;
+  alreadyApplied: boolean;
 }
 
 /**

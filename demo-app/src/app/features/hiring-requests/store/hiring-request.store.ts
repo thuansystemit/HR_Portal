@@ -57,7 +57,6 @@ export class HiringRequestStore {
       tap({
         next: () => {
           this._saving.set(false);
-          this.loadAll();
         },
         error: err => {
           this._error.set(err.error?.message || err.message || 'Failed to create hiring request');

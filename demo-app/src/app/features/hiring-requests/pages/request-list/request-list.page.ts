@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, TemplateRef, ViewChild, signal,
+  Component, OnInit, TemplateRef, ViewChild, signal, computed,
 } from '@angular/core';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
@@ -7,7 +7,7 @@ import { SHARED_IMPORTS } from '../../../../shared/shared.imports';
 import { TableColumn } from '../../../../shared/components/data-table/data-table.model';
 import { appFormatDate } from '../../../../shared/utils/date.utils';
 import { HiringRequestStore } from '../../store/hiring-request.store';
-import { HiringRequest } from '../../models/hiring-request.model';
+import { HiringRequest, RequestStatus } from '../../models/hiring-request.model';
 import { AuthService } from '../../../../auth/services/auth';
 
 @Component({
@@ -28,6 +28,22 @@ export class RequestListPage implements OnInit {
 
   protected columns = signal<TableColumn[]>([]);
   protected get isHR(): boolean { return this.auth.can('hiringRequestsViewAll'); }
+
+  protected readonly allStatuses: RequestStatus[] = [
+    'PENDING', 'IN_PROGRESS', 'CANDIDATE_FOUND', 'HIRED', 'CLOSED', 'REJECTED',
+  ];
+
+  protected readonly selectedStatus = signal<RequestStatus | null>(null);
+
+  protected readonly filteredRequests = computed<HiringRequest[]>(() => {
+    const status = this.selectedStatus();
+    const all    = this.store.requests();
+    return status ? all.filter(r => r.status === status) : all;
+  });
+
+  protected statusCount(status: RequestStatus): number {
+    return this.store.requests().filter(r => r.status === status).length;
+  }
 
   ngOnInit(): void {
     this.isHR ? this.store.loadAll() : this.store.loadMine();

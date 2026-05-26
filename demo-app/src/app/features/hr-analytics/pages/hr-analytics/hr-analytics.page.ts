@@ -1,7 +1,10 @@
-import { Component, OnInit, computed, inject } from '@angular/core';
+import { Component, NgZone, OnInit, computed, inject, signal } from '@angular/core';
 import * as Highcharts from 'highcharts';
+import { Router } from '@angular/router';
 import { SHARED_IMPORTS } from '../../../../shared/shared.imports';
 import { HrAnalyticsStore } from '../../store/hr-analytics.store';
+import { RecruitmentApi } from '../../../recruitment/services/recruitment.api';
+import { DropdownOption } from '../../../../shared/components/dropdown/dropdown.model';
 
 const STAGE_ORDER = ['APPLIED', 'SCREENING', 'INTERVIEW', 'OFFER', 'HIRED', 'REJECTED'];
 const STAGE_COLORS: Record<string, string> = {
@@ -20,8 +23,15 @@ const STAGE_COLORS: Record<string, string> = {
   styleUrl:    './hr-analytics.page.scss',
 })
 export class HrAnalyticsPage implements OnInit {
-  protected readonly store   = inject(HrAnalyticsStore);
-  readonly Highcharts         = Highcharts;
+  protected readonly store          = inject(HrAnalyticsStore);
+  private  readonly router          = inject(Router);
+  private  readonly ngZone          = inject(NgZone);
+  private  readonly recruitmentApi  = inject(RecruitmentApi);
+  readonly Highcharts               = Highcharts;
+
+  protected jobPostingOptions = signal<DropdownOption[]>([
+    { value: '', label: 'All job postings' },
+  ]);
 
   // ── Summary KPIs ─────────────────────────────────────────────────────────
 
@@ -54,7 +64,7 @@ export class HrAnalyticsPage implements OnInit {
     return {
       chart:  { type: 'bar', backgroundColor: 'transparent' },
       title:  { text: 'Recruitment Funnel' },
-      subtitle: { text: 'Candidates per pipeline stage' },
+      subtitle: { text: 'Click a bar to see candidates at that stage' },
       xAxis:  { categories: data.map(e => e.stage), reversed: false },
       yAxis:  { title: { text: 'Candidates' }, min: 0, allowDecimals: false },
       tooltip: { valueSuffix: ' candidates' },
@@ -64,6 +74,17 @@ export class HrAnalyticsPage implements OnInit {
           dataLabels: { enabled: true },
           colorByPoint: true,
           colors: data.map(e => STAGE_COLORS[e.stage] ?? '#6c757d'),
+          cursor: 'pointer',
+          point: {
+            events: {
+              click: (e: Highcharts.PointClickEventObject) => {
+                const stage = e.point.category as string;
+                this.ngZone.run(() =>
+                  this.router.navigate(['/recruitment'], { queryParams: { highlightStage: stage } })
+                );
+              },
+            },
+          },
         },
       },
       legend: { enabled: false },
@@ -101,7 +122,7 @@ export class HrAnalyticsPage implements OnInit {
     return {
       chart:  { type: 'bar', backgroundColor: 'transparent' },
       title:  { text: 'Top Skills in Candidate Pool' },
-      subtitle: { text: 'Unique candidates per skill (top 15)' },
+      subtitle: { text: 'Click a skill to search candidates with that skill' },
       xAxis:  { categories: data.map(e => e.skillName) },
       yAxis:  { title: { text: 'Candidates' }, min: 0, allowDecimals: false },
       tooltip: { valueSuffix: ' candidates' },
@@ -110,6 +131,17 @@ export class HrAnalyticsPage implements OnInit {
           borderRadius: 4,
           dataLabels: { enabled: true },
           color: '#6f42c1',
+          cursor: 'pointer',
+          point: {
+            events: {
+              click: (e: Highcharts.PointClickEventObject) => {
+                const skill = e.point.category as string;
+                this.ngZone.run(() =>
+                  this.router.navigate(['/cv-candidates/search'], { queryParams: { skills: skill } })
+                );
+              },
+            },
+          },
         },
       },
       legend: { enabled: false },
@@ -183,5 +215,11 @@ export class HrAnalyticsPage implements OnInit {
 
   ngOnInit(): void {
     this.store.loadAll();
+    this.recruitmentApi.listPostings(undefined, 0, 100).subscribe({
+      next: page => this.jobPostingOptions.set([
+        { value: '', label: 'All job postings' },
+        ...page.content.map(p => ({ value: p.id, label: p.title })),
+      ]),
+    });
   }
 }

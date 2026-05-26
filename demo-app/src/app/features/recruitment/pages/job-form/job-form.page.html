@@ -100,6 +100,34 @@
               ></textarea>
             </div>
 
+            <!-- Required Skills -->
+            <div class="col-12">
+              <label class="form-label fw-semibold">Required Skills</label>
+              <div class="d-flex flex-wrap gap-2 mb-2">
+                @for (tag of skillTags(); track tag) {
+                  <span class="badge bg-primary d-flex align-items-center gap-1 fs-6 fw-normal py-1 px-2">
+                    {{ tag }}
+                    <button type="button" class="btn-close btn-close-white btn-sm ms-1"
+                            aria-label="Remove" (click)="removeSkillTag(tag)"></button>
+                  </span>
+                }
+              </div>
+              <div class="input-group input-group-sm" style="max-width: 360px">
+                <input
+                  type="text"
+                  class="form-control"
+                  placeholder="e.g. Java, Docker…"
+                  [value]="skillInput()"
+                  (input)="skillInput.set($any($event.target).value)"
+                  (keydown)="onSkillKeydown($event)"
+                />
+                <button type="button" class="btn btn-outline-secondary" (click)="addSkillTag()">
+                  <i class="bi bi-plus-lg"></i> Add
+                </button>
+              </div>
+              <small class="text-muted">Press Enter or comma to add a skill.</small>
+            </div>
+
           </div>
 
           <hr class="mt-4" />

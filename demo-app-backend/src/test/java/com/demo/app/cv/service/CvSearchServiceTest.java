@@ -36,7 +36,7 @@ class CvSearchServiceTest {
     @Test
     void search_withNoCriteria_returnsAllCandidates() {
         CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
-                null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null);
 
         when(jdbc.queryForObject(anyString(), any(MapSqlParameterSource.class), eq(Long.class)))
                 .thenReturn(0L);
@@ -50,7 +50,7 @@ class CvSearchServiceTest {
     @Test
     void search_withZeroCount_returnsEmptyPage() {
         CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
-                "Java,Spring", "Developer", null, null, null, 0, 20, null);
+                "Java,Spring", "Developer", null, null, null, 0, 20, null, null);
 
         when(jdbc.queryForObject(anyString(), any(MapSqlParameterSource.class), eq(Long.class)))
                 .thenReturn(0L);
@@ -66,9 +66,8 @@ class CvSearchServiceTest {
     @Test
     void search_withSkills_addsSkillParamsToQuery() {
         CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
-                "Java,Python,React", null, null, null, null, 0, 10, null);
+                "Java,Python,React", null, null, null, null, 0, 10, null, null);
 
-        // Capture the SQL to verify skill parameters are included
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<MapSqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(MapSqlParameterSource.class);
 
@@ -80,13 +79,11 @@ class CvSearchServiceTest {
         String sql = sqlCaptor.getValue();
         MapSqlParameterSource params = paramsCaptor.getValue();
 
-        // Verify skill_match CTE uses word-boundary regex (not ILIKE partial match)
         assertThat(sql).contains("skill_match");
         assertThat(sql).contains("~* :skill_0");
         assertThat(sql).contains("~* :skill_1");
         assertThat(sql).contains("~* :skill_2");
 
-        // Verify params use \m...\M word-boundary anchors
         assertThat(params.getValue("skill_0")).isEqualTo("\\mjava\\M");
         assertThat(params.getValue("skill_1")).isEqualTo("\\mpython\\M");
         assertThat(params.getValue("skill_2")).isEqualTo("\\mreact\\M");
@@ -96,7 +93,7 @@ class CvSearchServiceTest {
     @Test
     void search_withTitle_addsTitleFilterToQuery() {
         CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
-                null, "Senior Developer", null, null, null, 0, 20, null);
+                null, "Senior Developer", null, null, null, 0, 20, null, null);
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<MapSqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(MapSqlParameterSource.class);
@@ -113,7 +110,7 @@ class CvSearchServiceTest {
     @Test
     void search_withLocation_addsLocationFilterToQuery() {
         CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
-                null, null, "New York", null, null, 0, 20, null);
+                null, null, "New York", null, null, 0, 20, null, null);
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<MapSqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(MapSqlParameterSource.class);
@@ -130,7 +127,7 @@ class CvSearchServiceTest {
     @Test
     void search_withMinExperience_addsExperienceFilter() {
         CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
-                null, null, null, 5, null, 0, 20, null);
+                null, null, null, 5, null, 0, 20, null, null);
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<MapSqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(MapSqlParameterSource.class);
@@ -147,7 +144,7 @@ class CvSearchServiceTest {
     @Test
     void search_withKeyword_addsKeywordFilter() {
         CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
-                null, null, null, null, "microservices", 0, 20, null);
+                null, null, null, null, "microservices", 0, 20, null, null);
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<MapSqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(MapSqlParameterSource.class);
@@ -166,25 +163,22 @@ class CvSearchServiceTest {
     @Test
     void search_sortByFullName_ordersCorrectly() {
         CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
-                null, null, null, null, null, 0, 20, "fullName");
+                null, null, null, null, null, 0, 20, "fullName", null);
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
 
-        // Count query returns 0 so we only capture the count SQL
         when(jdbc.queryForObject(sqlCaptor.capture(), any(MapSqlParameterSource.class), eq(Long.class)))
                 .thenReturn(0L);
 
         searchService.search(criteria);
 
-        // The count query doesn't include ORDER BY -- we need to verify the main query
-        // Since count returns 0, the main query is never called. Verify the criteria parsed correctly.
         assertThat(criteria.sortBy()).isEqualTo("fullName");
     }
 
     @Test
     void search_sortByExperienceYears_ordersCorrectly() {
         CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
-                null, null, null, null, null, 0, 20, "experienceYears");
+                null, null, null, null, null, 0, 20, "experienceYears", null);
 
         assertThat(criteria.sortBy()).isEqualTo("experienceYears");
     }
@@ -192,7 +186,7 @@ class CvSearchServiceTest {
     @Test
     void search_withAllCriteria_buildsCompleteQuery() {
         CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
-                "Java,Spring", "Senior", "Berlin", 3, "cloud", 0, 20, "relevanceScore");
+                "Java,Spring", "Senior", "Berlin", 3, "cloud", 0, 20, "relevanceScore", null);
 
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<MapSqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(MapSqlParameterSource.class);
@@ -205,17 +199,13 @@ class CvSearchServiceTest {
         String sql = sqlCaptor.getValue();
         MapSqlParameterSource params = paramsCaptor.getValue();
 
-        // All CTEs and filters present
         assertThat(sql).contains("skill_match");
         assertThat(sql).contains("ILIKE :title_filter");
         assertThat(sql).contains("ILIKE :location");
         assertThat(sql).contains(":min_experience");
         assertThat(sql).contains("ILIKE :keyword");
-
-        // Relevance scoring present
         assertThat(sql).contains("relevance_score");
 
-        // All params set
         assertThat(params.getValue("skill_0")).isEqualTo("\\mjava\\M");
         assertThat(params.getValue("skill_1")).isEqualTo("\\mspring\\M");
         assertThat(params.getValue("title_filter")).isEqualTo("%senior%");
@@ -227,7 +217,7 @@ class CvSearchServiceTest {
     @Test
     void search_pagination_setsCorrectOffsetAndLimit() {
         CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
-                null, null, null, null, null, 2, 15, null);
+                null, null, null, null, null, 2, 15, null, null);
 
         ArgumentCaptor<MapSqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(MapSqlParameterSource.class);
 
@@ -247,7 +237,7 @@ class CvSearchServiceTest {
                 UUID.randomUUID(), "John Doe", "john@example.com",
                 "Berlin", "Germany", "Senior Developer", 5.0,
                 List.of("Java", "Spring"), 80,
-                UUID.randomUUID(), UUID.randomUUID()
+                UUID.randomUUID(), UUID.randomUUID(), false
         );
     }
 
@@ -255,8 +245,6 @@ class CvSearchServiceTest {
     private void stubCountAndDataQuery(long count, List<CvSearchResultResponse> results) {
         when(jdbc.queryForObject(anyString(), any(MapSqlParameterSource.class), eq(Long.class)))
                 .thenReturn(count);
-        // Mockito returns results directly — the RowMapper lambda is never invoked,
-        // so fetchTopSkills (queryForList) is never called either.
         when(jdbc.query(anyString(), any(MapSqlParameterSource.class), any(RowMapper.class)))
                 .thenReturn(results);
     }
@@ -264,7 +252,7 @@ class CvSearchServiceTest {
     @Test
     void search_withPositiveCount_executesDataQueryAndReturnsPage() {
         CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
-                "Java", "Developer", "Berlin", 3, "cloud", 0, 20, "relevanceScore");
+                "Java", "Developer", "Berlin", 3, "cloud", 0, 20, "relevanceScore", null);
         stubCountAndDataQuery(1L, List.of(buildStubResult()));
 
         Page<CvSearchResultResponse> page = searchService.search(criteria);
@@ -279,7 +267,7 @@ class CvSearchServiceTest {
     @SuppressWarnings("unchecked")
     void search_sortByFullName_includesOrderByFullName() {
         CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
-                null, null, null, null, null, 0, 20, "fullName");
+                null, null, null, null, null, 0, 20, "fullName", null);
         when(jdbc.queryForObject(anyString(), any(MapSqlParameterSource.class), eq(Long.class)))
                 .thenReturn(1L);
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
@@ -295,7 +283,7 @@ class CvSearchServiceTest {
     @SuppressWarnings("unchecked")
     void search_sortByExperienceYears_includesOrderByExperience() {
         CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
-                null, null, null, null, null, 0, 20, "experienceYears");
+                null, null, null, null, null, 0, 20, "experienceYears", null);
         when(jdbc.queryForObject(anyString(), any(MapSqlParameterSource.class), eq(Long.class)))
                 .thenReturn(1L);
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
@@ -311,7 +299,7 @@ class CvSearchServiceTest {
     @SuppressWarnings("unchecked")
     void search_defaultSort_includesOrderByRelevanceScore() {
         CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
-                "Java", null, null, null, null, 0, 20, "relevanceScore");
+                "Java", null, null, null, null, 0, 20, "relevanceScore", null);
         when(jdbc.queryForObject(anyString(), any(MapSqlParameterSource.class), eq(Long.class)))
                 .thenReturn(1L);
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
@@ -326,7 +314,7 @@ class CvSearchServiceTest {
     @Test
     void search_withNullCount_returnsEmptyPage() {
         CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
-                null, null, null, null, null, 0, 20, null);
+                null, null, null, null, null, 0, 20, null, null);
         when(jdbc.queryForObject(anyString(), any(MapSqlParameterSource.class), eq(Long.class)))
                 .thenReturn(null);
 
@@ -335,5 +323,65 @@ class CvSearchServiceTest {
         assertThat(page.getTotalElements()).isZero();
         assertThat(page.getContent()).isEmpty();
         verify(jdbc, never()).query(anyString(), any(MapSqlParameterSource.class), any(RowMapper.class));
+    }
+
+    @Test
+    void search_withForJobPostingId_includesAlreadyAppliedSubSelect() {
+        UUID jobPostingId = UUID.randomUUID();
+        CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
+                null, null, null, null, null, 0, 20, null, jobPostingId);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<MapSqlParameterSource> paramsCaptor = ArgumentCaptor.forClass(MapSqlParameterSource.class);
+
+        when(jdbc.queryForObject(sqlCaptor.capture(), paramsCaptor.capture(), eq(Long.class)))
+                .thenReturn(0L);
+
+        searchService.search(criteria);
+
+        String sql = sqlCaptor.getValue();
+        MapSqlParameterSource params = paramsCaptor.getValue();
+
+        assertThat(sql).contains("job_applications ja");
+        assertThat(sql).contains("ja.job_posting_id = :forJobPostingId");
+        assertThat(sql).contains("already_applied");
+        assertThat(params.getValue("forJobPostingId")).isEqualTo(jobPostingId);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void search_withForJobPostingId_returnsAlreadyAppliedTrue_whenApplicationExists() {
+        UUID jobPostingId = UUID.randomUUID();
+        CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
+                null, null, null, null, null, 0, 20, null, jobPostingId);
+
+        var resultWithApplied = new CvSearchResultResponse(
+                UUID.randomUUID(), "Jane Doe", "jane@example.com",
+                "Berlin", "Germany", "Developer", 4.0,
+                List.of("Java"), 75, UUID.randomUUID(), UUID.randomUUID(), true
+        );
+        stubCountAndDataQuery(1L, List.of(resultWithApplied));
+
+        Page<CvSearchResultResponse> page = searchService.search(criteria);
+
+        assertThat(page.getContent()).hasSize(1);
+        assertThat(page.getContent().get(0).alreadyApplied()).isTrue();
+    }
+
+    @Test
+    void search_withoutForJobPostingId_includesFalseAlreadyApplied() {
+        CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
+                null, null, null, null, null, 0, 20, null, null);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+
+        when(jdbc.queryForObject(sqlCaptor.capture(), any(MapSqlParameterSource.class), eq(Long.class)))
+                .thenReturn(0L);
+
+        searchService.search(criteria);
+
+        String sql = sqlCaptor.getValue();
+        assertThat(sql).contains("false AS already_applied");
+        assertThat(sql).doesNotContain("job_applications");
     }
 }

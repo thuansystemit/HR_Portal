@@ -14,5 +14,6 @@ public record ApplicationResponse(
         String stage,
         String notes,
         Instant appliedAt,
-        Instant updatedAt
+        Instant updatedAt,
+        Integer fitScore
 ) {}

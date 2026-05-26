@@ -1,7 +1,10 @@
 package com.demo.app.recruitment.service;
 
+import com.demo.app.iam.repository.RoleRepository;
+import com.demo.app.iam.repository.UserRepository;
 import com.demo.app.platform.exception.ConflictException;
 import com.demo.app.platform.exception.ResourceNotFoundException;
+import com.demo.app.platform.notification.NotificationService;
 import com.demo.app.recruitment.dto.FeedbackResponse;
 import com.demo.app.recruitment.dto.InterviewResponse;
 import com.demo.app.recruitment.dto.ScheduleInterviewRequest;
@@ -15,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,9 +28,17 @@ import java.util.UUID;
 @Transactional
 public class InterviewService {
 
+    private static final DateTimeFormatter DATE_FMT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'").withZone(ZoneId.of("UTC"));
+
+    private static final List<String> HR_ROLE_NAMES = List.of("HR", "Administrator");
+
     private final JobApplicationRepository jobApplicationRepository;
     private final InterviewRepository interviewRepository;
     private final InterviewFeedbackRepository feedbackRepository;
+    private final NotificationService notificationService;
+    private final RoleRepository roleRepository;
+    private final UserRepository userRepository;
 
     public InterviewResponse schedule(UUID appId, ScheduleInterviewRequest req, UUID createdBy) {
         if (!jobApplicationRepository.existsById(appId)) {
@@ -34,12 +47,27 @@ public class InterviewService {
 
         var interview = Interview.builder()
                 .applicationId(appId)
+                .interviewerId(req.interviewerId())
                 .scheduledAt(req.scheduledAt())
                 .meetingLink(req.meetingLink())
                 .notes(req.notes())
                 .createdBy(createdBy)
                 .build();
         var saved = interviewRepository.save(interview);
+
+        if (saved.getInterviewerId() != null) {
+            String dateStr = DATE_FMT.format(saved.getScheduledAt());
+            String meetingInfo = saved.getMeetingLink() != null
+                    ? " Meeting link: " + saved.getMeetingLink()
+                    : "";
+            notificationService.send(
+                    saved.getInterviewerId(),
+                    "Interview Scheduled",
+                    "You have been assigned as an interviewer for application " + appId
+                            + " on " + dateStr + "." + meetingInfo
+            );
+        }
+
         return toResponse(saved, List.of());
     }
 
@@ -71,7 +99,11 @@ public class InterviewService {
                 .notes(req.notes())
                 .recommendation(req.recommendation())
                 .build();
-        return toFeedbackResponse(feedbackRepository.save(feedback));
+        var saved = feedbackRepository.save(feedback);
+
+        notifyHrAboutFeedback(interviewId, reviewerId, req.recommendation());
+
+        return toFeedbackResponse(saved);
     }
 
     @Transactional(readOnly = true)
@@ -81,9 +113,23 @@ public class InterviewService {
                 .toList();
     }
 
+    private void notifyHrAboutFeedback(UUID interviewId, UUID reviewerId, String recommendation) {
+        String body = "Feedback submitted for interview " + interviewId
+                + " by reviewer " + reviewerId
+                + ". Recommendation: " + recommendation;
+
+        HR_ROLE_NAMES.forEach(roleName ->
+                roleRepository.findByName(roleName).ifPresent(role ->
+                        userRepository.findActiveByRoleId(role.getId()).forEach(hrUser ->
+                                notificationService.send(hrUser.getId(), "Interview Feedback Submitted", body)
+                        )
+                )
+        );
+    }
+
     private InterviewResponse toResponse(Interview i, List<FeedbackResponse> feedback) {
         return new InterviewResponse(
-                i.getId(), i.getApplicationId(), i.getScheduledAt(),
+                i.getId(), i.getApplicationId(), i.getInterviewerId(), i.getScheduledAt(),
                 i.getMeetingLink(), i.getNotes(), i.getCreatedBy(), i.getCreatedAt(),
                 feedback);
     }

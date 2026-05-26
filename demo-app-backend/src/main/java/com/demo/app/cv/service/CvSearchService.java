@@ -123,6 +123,20 @@ public class CvSearchService {
                    c.document_category_id,
             """);
 
+        // Already-applied sub-select (only when forJobPostingId is provided)
+        if (criteria.hasForJobPostingId()) {
+            sb.append("""
+                EXISTS (
+                    SELECT 1 FROM job_applications ja
+                    WHERE ja.cv_candidate_id = c.id
+                      AND ja.job_posting_id = :forJobPostingId
+                ) AS already_applied,
+                """);
+            params.addValue("forJobPostingId", criteria.forJobPostingId());
+        } else {
+            sb.append("false AS already_applied,\n");
+        }
+
         // -- Relevance score computation
         sb.append(buildRelevanceScoreSql(criteria));
 
@@ -290,7 +304,8 @@ public class CvSearchService {
                 topSkills,
                 rs.getInt("relevance_score"),
                 rs.getObject("document_id", java.util.UUID.class),
-                rs.getObject("document_category_id", java.util.UUID.class)
+                rs.getObject("document_category_id", java.util.UUID.class),
+                rs.getBoolean("already_applied")
         );
     }
 

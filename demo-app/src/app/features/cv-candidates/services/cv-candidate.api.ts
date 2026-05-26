@@ -45,6 +45,7 @@ export class CvCandidateApi {
     if (params.page != null)         httpParams = httpParams.set('page', params.page.toString());
     if (params.size != null)         httpParams = httpParams.set('size', params.size.toString());
     if (params.sortBy)               httpParams = httpParams.set('sortBy', params.sortBy);
+    if (params.forJobPostingId)      httpParams = httpParams.set('forJobPostingId', params.forJobPostingId);
 
     return this.http.get<PageResponse<CvSearchResult>>(`${this.base}/search`, { params: httpParams });
   }

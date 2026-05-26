@@ -38,7 +38,7 @@ class InterviewControllerTest {
     void schedule_returns201_withLocation() {
         when(authentication.getName()).thenReturn(USER_ID.toString());
         var req = new ScheduleInterviewRequest(Instant.now().plusSeconds(86400),
-                "https://meet.example.com", "Technical round");
+                "https://meet.example.com", "Technical round", null);
         var response = buildInterviewResponse();
         when(interviewService.schedule(APP_ID, req, USER_ID)).thenReturn(response);
 
@@ -90,7 +90,7 @@ class InterviewControllerTest {
     }
 
     private InterviewResponse buildInterviewResponse() {
-        return new InterviewResponse(INTERVIEW_ID, APP_ID, Instant.now().plusSeconds(86400),
+        return new InterviewResponse(INTERVIEW_ID, APP_ID, null, Instant.now().plusSeconds(86400),
                 "https://meet.example.com", "Technical round", USER_ID, Instant.now(), List.of());
     }
 

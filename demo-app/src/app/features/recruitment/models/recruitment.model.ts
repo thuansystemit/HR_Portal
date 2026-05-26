@@ -32,6 +32,7 @@ export interface Application {
   notes: string;
   appliedAt: string;
   updatedAt: string;
+  fitScore: number | null;
 }
 
 export interface BoardResponse {
@@ -63,4 +64,9 @@ export interface Page<T> {
   totalPages: number;
   number: number;
   size: number;
+}
+
+export interface JobPostingSkill {
+  skillName: string;
+  isRequired: boolean;
 }

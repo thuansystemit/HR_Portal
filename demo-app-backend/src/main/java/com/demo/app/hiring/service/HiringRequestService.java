@@ -5,8 +5,11 @@ import com.demo.app.hiring.dto.HiringRequestResponse;
 import com.demo.app.hiring.dto.UpdateHiringRequestStatusRequest;
 import com.demo.app.hiring.entity.HiringRequest;
 import com.demo.app.hiring.repository.HiringRequestRepository;
+import com.demo.app.iam.repository.RoleRepository;
 import com.demo.app.iam.repository.UserRepository;
 import com.demo.app.platform.exception.ResourceNotFoundException;
+import com.demo.app.platform.notification.NotificationService;
+import com.demo.app.recruitment.repository.JobPostingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,9 +26,13 @@ public class HiringRequestService {
     private static final List<String> VALID_URGENCIES  = List.of("LOW", "MEDIUM", "HIGH", "CRITICAL");
     private static final List<String> VALID_STATUSES   = List.of(
             "PENDING", "IN_PROGRESS", "CANDIDATE_FOUND", "HIRED", "CLOSED", "REJECTED");
+    private static final List<String> HR_ROLE_NAMES    = List.of("HR", "Administrator");
 
     private final HiringRequestRepository hiringRequestRepository;
-    private final UserRepository userRepository;
+    private final UserRepository          userRepository;
+    private final JobPostingRepository    jobPostingRepository;
+    private final NotificationService     notificationService;
+    private final RoleRepository          roleRepository;
 
     public HiringRequestResponse create(CreateHiringRequestRequest req, UUID requesterId) {
         validateRoleType(req.roleType());
@@ -40,7 +47,22 @@ public class HiringRequestService {
                 .department(req.department())
                 .urgency(urgency)
                 .build();
-        return toResponse(hiringRequestRepository.save(entity));
+        HiringRequestResponse saved = toResponse(hiringRequestRepository.save(entity));
+        notifyHrAboutNewRequest(saved);
+        return saved;
+    }
+
+    private void notifyHrAboutNewRequest(HiringRequestResponse req) {
+        String title = "New Hiring Request";
+        String body  = String.format("A new %s hiring request \"%s\" has been submitted (urgency: %s).",
+                req.roleType(), req.title(), req.urgency());
+        HR_ROLE_NAMES.forEach(roleName ->
+                roleRepository.findByName(roleName).ifPresent(role ->
+                        userRepository.findActiveByRoleId(role.getId()).forEach(hrUser ->
+                                notificationService.send(hrUser.getId(), title, body)
+                        )
+                )
+        );
     }
 
     @Transactional(readOnly = true)
@@ -76,6 +98,22 @@ public class HiringRequestService {
         return hiringRequestRepository.findById(id)
                 .map(this::toResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("HiringRequest", id));
+    }
+
+    public HiringRequestResponse linkJobPosting(UUID requestId, UUID jobPostingId, UUID updatedBy) {
+        HiringRequest request = hiringRequestRepository.findById(requestId)
+                .orElseThrow(() -> new ResourceNotFoundException("HiringRequest", requestId));
+
+        if (!jobPostingRepository.existsById(jobPostingId)) {
+            throw new ResourceNotFoundException("JobPosting", jobPostingId);
+        }
+
+        request.setJobPostingId(jobPostingId);
+        if ("PENDING".equals(request.getStatus())) {
+            request.setStatus("IN_PROGRESS");
+        }
+
+        return toResponse(hiringRequestRepository.save(request));
     }
 
     private HiringRequestResponse toResponse(HiringRequest entity) {

@@ -14,6 +14,9 @@
         {{ store.currentPosting()!.status }}
       </span>
     }
+    <button class="btn btn-sm btn-outline-secondary me-2" (click)="findCandidates()">
+      <i class="bi bi-search me-1"></i> Find Candidates
+    </button>
     <button class="btn btn-sm btn-primary" (click)="openApplyModal()">
       <i class="bi bi-person-plus me-1"></i> Apply Candidate
     </button>
@@ -84,6 +87,14 @@
                     <i class="bi bi-calendar3 me-1"></i>
                     {{ app.appliedAt | appDate }}
                   </div>
+
+                  @if (app.fitScore !== null && app.fitScore !== undefined) {
+                    <div class="mt-1">
+                      <span class="badge" [ngClass]="fitScoreBadgeClass(app.fitScore)">
+                        <i class="bi bi-bullseye me-1"></i>{{ app.fitScore }}% fit
+                      </span>
+                    </div>
+                  }
 
                   <div class="mt-2 d-flex gap-1 flex-wrap">
 

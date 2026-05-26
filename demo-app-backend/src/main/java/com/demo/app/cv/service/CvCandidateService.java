@@ -3,6 +3,7 @@ package com.demo.app.cv.service;
 import com.demo.app.content.service.DocumentService;
 import com.demo.app.cv.dto.CreateCvCandidateRequest;
 import com.demo.app.cv.dto.CvCandidateResponse;
+import com.demo.app.cv.dto.CvCandidateSimpleResult;
 import com.demo.app.cv.dto.IngestCvRequest;
 import com.demo.app.cv.dto.UpdateHiringStatusRequest;
 import com.demo.app.cv.entity.*;
@@ -14,6 +15,7 @@ import com.demo.app.platform.exception.ResourceNotFoundException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -155,6 +157,14 @@ public class CvCandidateService {
         var candidate = candidateRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("CvCandidate", id));
         candidateRepository.delete(candidate);
+    }
+
+    public List<CvCandidateSimpleResult> searchSimple(String q, int size) {
+        var pageable = PageRequest.of(0, Math.min(size, 50));
+        return candidateRepository.searchSimple(q, pageable)
+                .stream()
+                .map(c -> new CvCandidateSimpleResult(c.getId(), c.getFullName(), c.getEmail()))
+                .toList();
     }
 
     private void saveWorkExperiences(UUID candidateId, CreateCvCandidateRequest request) {

@@ -1,6 +1,7 @@
 package com.demo.app.cv.controller;
 
 import com.demo.app.cv.dto.CvCandidateResponse;
+import com.demo.app.cv.dto.CvCandidateSimpleResult;
 import com.demo.app.cv.dto.IngestCvRequest;
 import com.demo.app.cv.dto.UpdateHiringStatusRequest;
 import com.demo.app.cv.service.CvCandidateService;
@@ -34,6 +35,13 @@ public class CvCandidateController {
         return ResponseEntity
                 .created(URI.create("/api/v1/cv-candidates/" + created.id()))
                 .body(created);
+    }
+
+    @GetMapping("/search-simple")
+    public ResponseEntity<List<CvCandidateSimpleResult>> searchSimple(
+            @RequestParam String q,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(cvCandidateService.searchSimple(q, size));
     }
 
     @GetMapping("/{id}")

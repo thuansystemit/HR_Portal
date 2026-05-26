@@ -2,6 +2,7 @@ package com.demo.app.recruitment;
 
 import com.demo.app.recruitment.controller.JobPostingController;
 import com.demo.app.recruitment.dto.*;
+import com.demo.app.recruitment.dto.JobPostingSkillDto;
 import com.demo.app.recruitment.service.JobPostingService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -96,6 +97,34 @@ class JobPostingControllerTest {
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         verify(jobPostingService).delete(POSTING_ID);
+    }
+
+    @Test
+    void getSkills_returns200_withList() {
+        var skills = List.of(new JobPostingSkillDto("Java", true), new JobPostingSkillDto("Docker", false));
+        when(jobPostingService.getSkills(POSTING_ID)).thenReturn(skills);
+
+        var result = controller.getSkills(POSTING_ID);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(result.getBody()).hasSize(2);
+        assertThat(result.getBody().get(0).skillName()).isEqualTo("Java");
+        assertThat(result.getBody().get(0).isRequired()).isTrue();
+        verify(jobPostingService).getSkills(POSTING_ID);
+    }
+
+    @Test
+    void setSkills_returns200_withUpdatedList() {
+        var input = List.of(new JobPostingSkillDto("Kotlin", true));
+        var saved  = List.of(new JobPostingSkillDto("Kotlin", true));
+        when(jobPostingService.setSkills(POSTING_ID, input)).thenReturn(saved);
+
+        var result = controller.setSkills(POSTING_ID, input);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(result.getBody()).hasSize(1);
+        assertThat(result.getBody().get(0).skillName()).isEqualTo("Kotlin");
+        verify(jobPostingService).setSkills(POSTING_ID, input);
     }
 
     private JobPostingResponse buildResponse() {

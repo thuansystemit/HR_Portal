@@ -87,6 +87,6 @@ class JobApplicationControllerTest {
         return new ApplicationResponse(APP_ID, POSTING_ID, "Software Engineer", CANDIDATE_ID,
                 UUID.randomUUID(),
                 "Jane Doe", "jane@example.com", "APPLIED", null,
-                Instant.now(), Instant.now());
+                Instant.now(), Instant.now(), null);
     }
 }

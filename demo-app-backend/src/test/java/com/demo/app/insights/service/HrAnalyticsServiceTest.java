@@ -11,8 +11,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -42,13 +44,14 @@ class HrAnalyticsServiceTest {
                 new Object[]{"HIRED", 2L}
         ));
 
-        List<FunnelStageEntry> result = service.recruitmentFunnel();
+        List<FunnelStageEntry> result = service.recruitmentFunnel(null);
 
         assertThat(result).hasSize(3);
         assertThat(result.get(0).stage()).isEqualTo("APPLIED");
         assertThat(result.get(0).count()).isEqualTo(10);
         assertThat(result.get(1).stage()).isEqualTo("SCREENING");
         assertThat(result.get(2).count()).isEqualTo(2);
+        verify(query, never()).setParameter(anyString(), any());
     }
 
     @Test
@@ -56,7 +59,22 @@ class HrAnalyticsServiceTest {
         when(em.createNativeQuery(anyString())).thenReturn(query);
         when(query.getResultList()).thenReturn(List.of());
 
-        assertThat(service.recruitmentFunnel()).isEmpty();
+        assertThat(service.recruitmentFunnel(null)).isEmpty();
+    }
+
+    @Test
+    void funnel_withJobPostingId_setsParameterAndFilters() {
+        UUID jobId = UUID.randomUUID();
+        when(em.createNativeQuery(anyString())).thenReturn(query);
+        when(query.setParameter(anyString(), any())).thenReturn(query);
+        when(query.getResultList()).thenReturn(rows(new Object[]{"APPLIED", 5L}));
+
+        List<FunnelStageEntry> result = service.recruitmentFunnel(jobId);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).stage()).isEqualTo("APPLIED");
+        assertThat(result.get(0).count()).isEqualTo(5);
+        verify(query).setParameter("jobPostingId", jobId);
     }
 
     // ── timeToHire ─────────────────────────────────────────────────────────
@@ -69,12 +87,13 @@ class HrAnalyticsServiceTest {
                 new Object[]{"Frontend Engineer", 8.0}
         ));
 
-        List<TimeToHireEntry> result = service.timeToHire();
+        List<TimeToHireEntry> result = service.timeToHire(null);
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).jobTitle()).isEqualTo("Senior Java Developer");
         assertThat(result.get(0).avgDays()).isEqualTo(12.5);
         assertThat(result.get(1).avgDays()).isEqualTo(8.0);
+        verify(query, never()).setParameter(anyString(), any());
     }
 
     @Test
@@ -82,7 +101,21 @@ class HrAnalyticsServiceTest {
         when(em.createNativeQuery(anyString())).thenReturn(query);
         when(query.getResultList()).thenReturn(List.of());
 
-        assertThat(service.timeToHire()).isEmpty();
+        assertThat(service.timeToHire(null)).isEmpty();
+    }
+
+    @Test
+    void timeToHire_withJobPostingId_setsParameterAndFilters() {
+        UUID jobId = UUID.randomUUID();
+        when(em.createNativeQuery(anyString())).thenReturn(query);
+        when(query.setParameter(anyString(), any())).thenReturn(query);
+        when(query.getResultList()).thenReturn(rows(new Object[]{"Backend Engineer", 10.0}));
+
+        List<TimeToHireEntry> result = service.timeToHire(jobId);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).jobTitle()).isEqualTo("Backend Engineer");
+        verify(query).setParameter("jobPostingId", jobId);
     }
 
     // ── topSkills ──────────────────────────────────────────────────────────
@@ -96,11 +129,12 @@ class HrAnalyticsServiceTest {
                 new Object[]{"React", 4L}
         ));
 
-        List<TopSkillEntry> result = service.topSkills();
+        List<TopSkillEntry> result = service.topSkills(null);
 
         assertThat(result).hasSize(3);
         assertThat(result.get(0).skillName()).isEqualTo("Java");
         assertThat(result.get(0).candidateCount()).isEqualTo(8);
+        verify(query, never()).setParameter(anyString(), any());
     }
 
     @Test
@@ -108,7 +142,22 @@ class HrAnalyticsServiceTest {
         when(em.createNativeQuery(anyString())).thenReturn(query);
         when(query.getResultList()).thenReturn(List.of());
 
-        assertThat(service.topSkills()).isEmpty();
+        assertThat(service.topSkills(null)).isEmpty();
+    }
+
+    @Test
+    void topSkills_withJobPostingId_setsParameterAndFilters() {
+        UUID jobId = UUID.randomUUID();
+        when(em.createNativeQuery(anyString())).thenReturn(query);
+        when(query.setParameter(anyString(), any())).thenReturn(query);
+        when(query.getResultList()).thenReturn(rows(new Object[]{"Kotlin", 3L}));
+
+        List<TopSkillEntry> result = service.topSkills(jobId);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).skillName()).isEqualTo("Kotlin");
+        assertThat(result.get(0).candidateCount()).isEqualTo(3);
+        verify(query).setParameter("jobPostingId", jobId);
     }
 
     // ── applicationTrend ──────────────────────────────────────────────────
@@ -122,11 +171,12 @@ class HrAnalyticsServiceTest {
                 new Object[]{"2026-03", 5L}
         ));
 
-        List<ApplicationTrendEntry> result = service.applicationTrend();
+        List<ApplicationTrendEntry> result = service.applicationTrend(null);
 
         assertThat(result).hasSize(3);
         assertThat(result.get(0).month()).isEqualTo("2026-01");
         assertThat(result.get(1).count()).isEqualTo(7);
+        verify(query, never()).setParameter(anyString(), any());
     }
 
     @Test
@@ -134,14 +184,28 @@ class HrAnalyticsServiceTest {
         when(em.createNativeQuery(anyString())).thenReturn(query);
         when(query.getResultList()).thenReturn(List.of());
 
-        assertThat(service.applicationTrend()).isEmpty();
+        assertThat(service.applicationTrend(null)).isEmpty();
+    }
+
+    @Test
+    void applicationTrend_withJobPostingId_setsParameterAndFilters() {
+        UUID jobId = UUID.randomUUID();
+        when(em.createNativeQuery(anyString())).thenReturn(query);
+        when(query.setParameter(anyString(), any())).thenReturn(query);
+        when(query.getResultList()).thenReturn(rows(new Object[]{"2026-05", 4L}));
+
+        List<ApplicationTrendEntry> result = service.applicationTrend(jobId);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).month()).isEqualTo("2026-05");
+        assertThat(result.get(0).count()).isEqualTo(4);
+        verify(query).setParameter("jobPostingId", jobId);
     }
 
     // ── conversionRates ───────────────────────────────────────────────────
 
     @Test
     void conversionRates_computesRatesFromFunnel() {
-        // recruitmentFunnel() calls em.createNativeQuery internally
         when(em.createNativeQuery(anyString())).thenReturn(query);
         when(query.getResultList()).thenReturn(rows(
                 new Object[]{"APPLIED",   100L},
@@ -152,7 +216,7 @@ class HrAnalyticsServiceTest {
                 new Object[]{"REJECTED",   20L}
         ));
 
-        List<ConversionRateEntry> result = service.conversionRates();
+        List<ConversionRateEntry> result = service.conversionRates(null);
 
         assertThat(result).hasSize(4);
         // APPLIED(100) → SCREENING(60) = 60%
@@ -172,7 +236,7 @@ class HrAnalyticsServiceTest {
         when(em.createNativeQuery(anyString())).thenReturn(query);
         when(query.getResultList()).thenReturn(List.of());
 
-        List<ConversionRateEntry> result = service.conversionRates();
+        List<ConversionRateEntry> result = service.conversionRates(null);
 
         assertThat(result).hasSize(4);
         result.forEach(e -> assertThat(e.rate()).isEqualTo(0.0));
@@ -186,9 +250,32 @@ class HrAnalyticsServiceTest {
                 new Object[]{"APPLIED", 50L}
         ));
 
-        List<ConversionRateEntry> result = service.conversionRates();
+        List<ConversionRateEntry> result = service.conversionRates(null);
 
         assertThat(result.get(0).fromStage()).isEqualTo("APPLIED");
         assertThat(result.get(0).rate()).isEqualTo(0.0);
+    }
+
+    @Test
+    void conversionRates_withJobPostingId_forwardsToFunnel() {
+        UUID jobId = UUID.randomUUID();
+        when(em.createNativeQuery(anyString())).thenReturn(query);
+        when(query.setParameter(anyString(), any())).thenReturn(query);
+        when(query.getResultList()).thenReturn(rows(
+                new Object[]{"APPLIED",   20L},
+                new Object[]{"SCREENING", 10L},
+                new Object[]{"INTERVIEW",  5L},
+                new Object[]{"OFFER",      2L},
+                new Object[]{"HIRED",      2L}
+        ));
+
+        List<ConversionRateEntry> result = service.conversionRates(jobId);
+
+        assertThat(result).hasSize(4);
+        // APPLIED(20) → SCREENING(10) = 50%
+        assertThat(result.get(0).rate()).isEqualTo(50.0);
+        // OFFER(2) → HIRED(2) = 100%
+        assertThat(result.get(3).rate()).isEqualTo(100.0);
+        verify(query).setParameter("jobPostingId", jobId);
     }
 }

@@ -1,8 +1,10 @@
 package com.demo.app.cv.controller;
 
 import com.demo.app.cv.dto.CvCandidateResponse;
+import com.demo.app.cv.dto.CvCandidateSimpleResult;
 import com.demo.app.cv.dto.IngestCvRequest;
 import com.demo.app.cv.service.CvCandidateService;
+import com.demo.app.recruitment.service.JobApplicationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -23,6 +25,9 @@ class CvCandidateControllerTest {
 
     @Mock
     private CvCandidateService cvCandidateService;
+
+    @Mock
+    private JobApplicationService jobApplicationService;
 
     @InjectMocks
     private CvCandidateController cvCandidateController;
@@ -106,5 +111,27 @@ class CvCandidateControllerTest {
 
         verify(cvCandidateService).delete(CANDIDATE_ID);
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void searchSimple_returnsMatchingCandidates() {
+        var hit = new CvCandidateSimpleResult(CANDIDATE_ID, "John Doe", "john@example.com");
+        when(cvCandidateService.searchSimple("John", 10)).thenReturn(List.of(hit));
+
+        var result = cvCandidateController.searchSimple("John", 10);
+
+        assertThat(result.getStatusCode().value()).isEqualTo(200);
+        assertThat(result.getBody()).hasSize(1);
+        assertThat(result.getBody().get(0).fullName()).isEqualTo("John Doe");
+    }
+
+    @Test
+    void searchSimple_returnsEmptyList_whenNoMatch() {
+        when(cvCandidateService.searchSimple("zzz", 10)).thenReturn(List.of());
+
+        var result = cvCandidateController.searchSimple("zzz", 10);
+
+        assertThat(result.getStatusCode().value()).isEqualTo(200);
+        assertThat(result.getBody()).isEmpty();
     }
 }

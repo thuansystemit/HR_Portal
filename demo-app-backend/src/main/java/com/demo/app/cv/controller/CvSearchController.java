@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/v1/cv-candidates/search")
 @RequiredArgsConstructor
@@ -43,11 +45,12 @@ public class CvSearchController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
-            @RequestParam(required = false) String sortBy
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) UUID forJobPostingId
     ) {
         CvSearchCriteria criteria = CvSearchCriteria.withDefaults(
                 skills, title, location, minYearsExperience, keyword,
-                page, size, sortBy
+                page, size, sortBy, forJobPostingId
         );
         Page<CvSearchResultResponse> results = cvSearchService.search(criteria);
         return ResponseEntity.ok(results);

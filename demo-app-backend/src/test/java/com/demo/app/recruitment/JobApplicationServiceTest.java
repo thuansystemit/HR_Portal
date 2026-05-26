@@ -1,16 +1,20 @@
 package com.demo.app.recruitment;
 
 import com.demo.app.cv.entity.CvCandidate;
+import com.demo.app.cv.entity.CvTechnicalSkill;
 import com.demo.app.cv.repository.CvCandidateRepository;
+import com.demo.app.cv.repository.CvTechnicalSkillRepository;
 import com.demo.app.platform.exception.ConflictException;
 import com.demo.app.platform.exception.ResourceNotFoundException;
 import com.demo.app.recruitment.dto.CreateApplicationRequest;
 import com.demo.app.recruitment.dto.MoveStageRequest;
 import com.demo.app.recruitment.entity.JobApplication;
 import com.demo.app.recruitment.entity.JobPosting;
+import com.demo.app.recruitment.entity.JobPostingSkill;
 import com.demo.app.recruitment.repository.ApplicationStageHistoryRepository;
 import com.demo.app.recruitment.repository.JobApplicationRepository;
 import com.demo.app.recruitment.repository.JobPostingRepository;
+import com.demo.app.recruitment.repository.JobPostingSkillRepository;
 import com.demo.app.recruitment.service.CandidateHiringStatusService;
 import com.demo.app.recruitment.service.JobApplicationService;
 import org.junit.jupiter.api.Test;
@@ -36,6 +40,8 @@ class JobApplicationServiceTest {
     @Mock ApplicationStageHistoryRepository stageHistoryRepository;
     @Mock CvCandidateRepository cvCandidateRepository;
     @Mock CandidateHiringStatusService hiringStatusService;
+    @Mock JobPostingSkillRepository jobPostingSkillRepository;
+    @Mock CvTechnicalSkillRepository cvTechnicalSkillRepository;
 
     @InjectMocks
     JobApplicationService jobApplicationService;
@@ -250,6 +256,92 @@ class JobApplicationServiceTest {
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
+    // ── fitScore ──────────────────────────────────────────────────────────────
+
+    @Test
+    void fitScore_returnsNull_whenPostingHasNoRequiredSkills() {
+        var app = buildApplication("APPLIED");
+        var req = new CreateApplicationRequest(CANDIDATE_ID, null);
+        var posting = buildPosting("OPEN");
+
+        when(jobPostingRepository.findById(POSTING_ID)).thenReturn(Optional.of(posting));
+        when(jobApplicationRepository.existsByJobPostingIdAndCvCandidateId(any(), any())).thenReturn(false);
+        when(jobApplicationRepository.save(any())).thenReturn(app);
+        when(stageHistoryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(cvCandidateRepository.findById(CANDIDATE_ID)).thenReturn(Optional.of(buildCandidate()));
+        when(jobPostingSkillRepository.findByJobPostingId(POSTING_ID)).thenReturn(List.of());
+
+        var result = jobApplicationService.apply(POSTING_ID, req, MOVER_ID);
+
+        assertThat(result.fitScore()).isNull();
+        verify(cvTechnicalSkillRepository, never()).findByCvCandidateId(any());
+    }
+
+    @Test
+    void fitScore_returns100_whenAllSkillsMatch() {
+        var app = buildApplication("APPLIED");
+        var posting = buildPosting("OPEN");
+        var javaSkill   = buildPostingSkill("Java");
+        var springSkill = buildPostingSkill("Spring Boot");
+        var req = new CreateApplicationRequest(CANDIDATE_ID, null);
+
+        when(jobPostingRepository.findById(POSTING_ID)).thenReturn(Optional.of(posting));
+        when(jobApplicationRepository.existsByJobPostingIdAndCvCandidateId(any(), any())).thenReturn(false);
+        when(jobApplicationRepository.save(any())).thenReturn(app);
+        when(stageHistoryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(cvCandidateRepository.findById(CANDIDATE_ID)).thenReturn(Optional.of(buildCandidate()));
+        when(jobPostingSkillRepository.findByJobPostingId(POSTING_ID))
+                .thenReturn(List.of(javaSkill, springSkill));
+        when(cvTechnicalSkillRepository.findByCvCandidateId(CANDIDATE_ID))
+                .thenReturn(List.of(buildCandidateSkill("Java"), buildCandidateSkill("Spring Boot")));
+
+        var result = jobApplicationService.apply(POSTING_ID, req, MOVER_ID);
+
+        assertThat(result.fitScore()).isEqualTo(100);
+    }
+
+    @Test
+    void fitScore_returns50_whenHalfSkillsMatch() {
+        var app = buildApplication("APPLIED");
+        var posting = buildPosting("OPEN");
+        var req = new CreateApplicationRequest(CANDIDATE_ID, null);
+
+        when(jobPostingRepository.findById(POSTING_ID)).thenReturn(Optional.of(posting));
+        when(jobApplicationRepository.existsByJobPostingIdAndCvCandidateId(any(), any())).thenReturn(false);
+        when(jobApplicationRepository.save(any())).thenReturn(app);
+        when(stageHistoryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(cvCandidateRepository.findById(CANDIDATE_ID)).thenReturn(Optional.of(buildCandidate()));
+        when(jobPostingSkillRepository.findByJobPostingId(POSTING_ID))
+                .thenReturn(List.of(buildPostingSkill("Java"), buildPostingSkill("Docker")));
+        when(cvTechnicalSkillRepository.findByCvCandidateId(CANDIDATE_ID))
+                .thenReturn(List.of(buildCandidateSkill("Java")));
+
+        var result = jobApplicationService.apply(POSTING_ID, req, MOVER_ID);
+
+        assertThat(result.fitScore()).isEqualTo(50);
+    }
+
+    @Test
+    void fitScore_isCaseInsensitive() {
+        var app = buildApplication("APPLIED");
+        var posting = buildPosting("OPEN");
+        var req = new CreateApplicationRequest(CANDIDATE_ID, null);
+
+        when(jobPostingRepository.findById(POSTING_ID)).thenReturn(Optional.of(posting));
+        when(jobApplicationRepository.existsByJobPostingIdAndCvCandidateId(any(), any())).thenReturn(false);
+        when(jobApplicationRepository.save(any())).thenReturn(app);
+        when(stageHistoryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(cvCandidateRepository.findById(CANDIDATE_ID)).thenReturn(Optional.of(buildCandidate()));
+        when(jobPostingSkillRepository.findByJobPostingId(POSTING_ID))
+                .thenReturn(List.of(buildPostingSkill("Spring Boot")));
+        when(cvTechnicalSkillRepository.findByCvCandidateId(CANDIDATE_ID))
+                .thenReturn(List.of(buildCandidateSkill("spring boot")));  // lowercase
+
+        var result = jobApplicationService.apply(POSTING_ID, req, MOVER_ID);
+
+        assertThat(result.fitScore()).isEqualTo(100);
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private JobPosting buildPosting(String status) {
@@ -295,6 +387,23 @@ class JobApplicationServiceTest {
                 .documentCategoryId(UUID.randomUUID())
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
+                .build();
+    }
+
+    private JobPostingSkill buildPostingSkill(String name) {
+        return JobPostingSkill.builder()
+                .id(UUID.randomUUID())
+                .jobPostingId(POSTING_ID)
+                .skillName(name)
+                .isRequired(true)
+                .build();
+    }
+
+    private CvTechnicalSkill buildCandidateSkill(String name) {
+        return CvTechnicalSkill.builder()
+                .id(UUID.randomUUID())
+                .cvCandidateId(CANDIDATE_ID)
+                .skillName(name)
                 .build();
     }
 }

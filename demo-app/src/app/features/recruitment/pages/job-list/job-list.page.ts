@@ -1,5 +1,5 @@
 import { Component, OnInit, TemplateRef, ViewChild, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { SHARED_IMPORTS } from '../../../../shared/shared.imports';
 import { TableColumn } from '../../../../shared/components/data-table/data-table.model';
 import { DialogService } from '../../../../shared/components/dialog/dialog.service';
@@ -15,13 +15,15 @@ import { JobPostingSummary } from '../../models/recruitment.model';
 export class JobListPage implements OnInit {
   protected readonly store  = inject(RecruitmentStore);
   private  readonly router  = inject(Router);
+  private  readonly route   = inject(ActivatedRoute);
   private  readonly dialog  = inject(DialogService);
 
   @ViewChild('statusTpl',  { static: true }) statusTpl!:  TemplateRef<{ $implicit: unknown; row: unknown }>;
   @ViewChild('actionsTpl', { static: true }) actionsTpl!: TemplateRef<{ $implicit: unknown; row: unknown }>;
 
-  protected activeStatus = signal<string>('');
-  protected columns      = signal<TableColumn[]>([]);
+  protected activeStatus   = signal<string>('');
+  protected columns        = signal<TableColumn[]>([]);
+  protected highlightStage = signal<string | null>(null);
 
   readonly statusTabs = [
     { label: 'All',    value: '' },
@@ -32,6 +34,8 @@ export class JobListPage implements OnInit {
 
   ngOnInit(): void {
     this.store.loadPostings();
+    const stage = this.route.snapshot.queryParams['highlightStage'] as string | undefined;
+    if (stage) this.highlightStage.set(stage);
     this.columns.set([
       { key: 'title',            label: 'Title',        sortable: true, filterable: true },
       { key: 'department',       label: 'Department',   sortable: true },
@@ -60,6 +64,13 @@ export class JobListPage implements OnInit {
   editPosting(row: unknown): void {
     const posting = row as JobPostingSummary;
     this.router.navigate(['/recruitment', posting.id, 'edit']);
+  }
+
+  findCandidates(row: unknown): void {
+    const posting = row as JobPostingSummary;
+    this.router.navigate(['/cv-candidates/search'], {
+      queryParams: { forJobPostingId: posting.id },
+    });
   }
 
   async confirmDelete(row: unknown): Promise<void> {

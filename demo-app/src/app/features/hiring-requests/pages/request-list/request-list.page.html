@@ -12,9 +12,34 @@
     <div class="alert alert-danger">{{ store.error() }}</div>
   }
 
+  @if (!isHR) {
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <button
+        class="btn btn-sm"
+        [class.btn-primary]="selectedStatus() === null"
+        [class.btn-outline-secondary]="selectedStatus() !== null"
+        (click)="selectedStatus.set(null)">
+        All <span class="badge ms-1" [class.bg-light]="selectedStatus() === null" [class.text-dark]="selectedStatus() === null" [class.bg-secondary]="selectedStatus() !== null">{{ store.requests().length }}</span>
+      </button>
+      @for (status of allStatuses; track status) {
+        <button
+          class="btn btn-sm"
+          [class.btn-primary]="selectedStatus() === status"
+          [class.btn-outline-secondary]="selectedStatus() !== status"
+          (click)="selectedStatus.set(status)">
+          {{ statusLabel(status) }}
+          <span class="badge ms-1"
+                [class.bg-light]="selectedStatus() === status"
+                [class.text-dark]="selectedStatus() === status"
+                [class.bg-secondary]="selectedStatus() !== status">{{ statusCount(status) }}</span>
+        </button>
+      }
+    </div>
+  }
+
   <app-data-table
     [columns]="columns()"
-    [data]="store.requests()"
+    [data]="isHR ? store.requests() : filteredRequests()"
     [loading]="store.loading()"
     emptyMessage="No hiring requests found."
   />

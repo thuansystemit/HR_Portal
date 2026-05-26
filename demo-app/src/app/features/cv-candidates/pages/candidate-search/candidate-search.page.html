@@ -5,6 +5,16 @@
     </a>
   </ng-container>
 
+  <!-- Job Posting Context Banner -->
+  @if (forJobPostingId()) {
+    <div class="alert alert-info d-flex align-items-center gap-2 mb-3 py-2">
+      <i class="bi bi-info-circle-fill fs-5 flex-shrink-0"></i>
+      <span>
+        Showing results in context of a job posting. Candidates already in the pipeline are marked.
+      </span>
+    </div>
+  }
+
   <!-- Search Form Card -->
   <div class="card mb-4">
     <div class="card-body">
@@ -163,7 +173,12 @@
 
 <!-- Actions cell -->
 <ng-template #actionsTpl let-row="row">
-  <div class="d-flex gap-1 justify-content-center">
+  <div class="d-flex gap-1 justify-content-center align-items-center">
+    @if ($any(row).alreadyApplied) {
+      <span class="badge bg-warning text-dark me-1" title="Already in the pipeline for this job posting">
+        <i class="bi bi-check2-circle me-1"></i>Applied
+      </span>
+    }
     <app-btn size="sm" variant="outline-info" icon="bi-person-circle" [iconOnly]="true"
              title="View Profile" (btnClick)="viewCandidate(row)" />
     <app-btn size="sm" variant="outline-success" icon="bi-briefcase" [iconOnly]="true"

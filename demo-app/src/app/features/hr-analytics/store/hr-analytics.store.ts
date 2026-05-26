@@ -15,26 +15,28 @@ export class HrAnalyticsStore {
   private readonly _topSkills       = signal<TopSkillEntry[]>([]);
   private readonly _applicationTrend = signal<ApplicationTrendEntry[]>([]);
   private readonly _conversionRates = signal<ConversionRateEntry[]>([]);
-  private readonly _loading         = signal(false);
-  private readonly _error           = signal<string | null>(null);
+  private readonly _loading               = signal(false);
+  private readonly _error                 = signal<string | null>(null);
+  private readonly _selectedJobPostingId  = signal<string | null>(null);
 
-  readonly funnel           = this._funnel.asReadonly();
-  readonly timeToHire       = this._timeToHire.asReadonly();
-  readonly topSkills        = this._topSkills.asReadonly();
-  readonly applicationTrend = this._applicationTrend.asReadonly();
-  readonly conversionRates  = this._conversionRates.asReadonly();
-  readonly loading          = this._loading.asReadonly();
-  readonly error            = this._error.asReadonly();
+  readonly funnel                = this._funnel.asReadonly();
+  readonly timeToHire            = this._timeToHire.asReadonly();
+  readonly topSkills             = this._topSkills.asReadonly();
+  readonly applicationTrend      = this._applicationTrend.asReadonly();
+  readonly conversionRates       = this._conversionRates.asReadonly();
+  readonly loading               = this._loading.asReadonly();
+  readonly error                 = this._error.asReadonly();
+  readonly selectedJobPostingId  = this._selectedJobPostingId.asReadonly();
 
-  loadAll(): void {
+  loadAll(jobPostingId?: string | null): void {
     this._loading.set(true);
     this._error.set(null);
     forkJoin({
-      funnel:           this.api.funnel(),
-      timeToHire:       this.api.timeToHire(),
-      topSkills:        this.api.topSkills(),
-      applicationTrend: this.api.applicationTrend(),
-      conversionRates:  this.api.conversionRates(),
+      funnel:           this.api.funnel(jobPostingId),
+      timeToHire:       this.api.timeToHire(jobPostingId),
+      topSkills:        this.api.topSkills(jobPostingId),
+      applicationTrend: this.api.applicationTrend(jobPostingId),
+      conversionRates:  this.api.conversionRates(jobPostingId),
     }).subscribe({
       next: d => {
         this._funnel.set(d.funnel);
@@ -46,5 +48,10 @@ export class HrAnalyticsStore {
       },
       error: err => { this._error.set(err.message); this._loading.set(false); },
     });
+  }
+
+  selectJobPosting(id: string | null): void {
+    this._selectedJobPostingId.set(id);
+    this.loadAll(id);
   }
 }

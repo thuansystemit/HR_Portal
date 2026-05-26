@@ -7,6 +7,7 @@ import java.util.UUID;
 public record InterviewResponse(
         UUID id,
         UUID applicationId,
+        UUID interviewerId,
         Instant scheduledAt,
         String meetingLink,
         String notes,

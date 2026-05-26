@@ -45,6 +45,12 @@ export class RequestDetailPage implements OnInit {
   protected candidateOptions   = signal<DropdownOption[]>([]);
   protected shares             = signal<CvShare[]>([]);
 
+  /** Link Job Posting (dedicated action) */
+  protected linkPosting        = signal<string>('');
+  protected linkSaving         = signal(false);
+  protected linkError          = signal<string | null>(null);
+  protected linkSuccess        = signal<string | null>(null);
+
   protected get isHR(): boolean { return this.auth.can('hiringRequestsManage'); }
 
   protected statusForm = this.fb.group({
@@ -157,6 +163,27 @@ export class RequestDetailPage implements OnInit {
       error: err => {
         this.shareError.set(err.error?.message || 'Failed to share CV.');
         this.shareSaving.set(false);
+      },
+    });
+  }
+
+  protected submitLinkPosting(): void {
+    const jobPostingId = this.linkPosting();
+    if (!jobPostingId) { this.linkError.set('Please select a job posting.'); return; }
+
+    this.linkSaving.set(true);
+    this.linkError.set(null);
+    this.linkSuccess.set(null);
+
+    this.api.linkJobPosting(this.requestId(), jobPostingId).subscribe({
+      next: updated => {
+        this.request.set(updated);
+        this.linkSuccess.set('Job posting linked successfully.');
+        this.linkSaving.set(false);
+      },
+      error: err => {
+        this.linkError.set(err.error?.message || 'Failed to link job posting.');
+        this.linkSaving.set(false);
       },
     });
   }

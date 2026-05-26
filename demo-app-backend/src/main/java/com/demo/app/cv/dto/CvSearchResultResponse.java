@@ -18,5 +18,6 @@ public record CvSearchResultResponse(
         List<String> topSkills,
         int relevanceScore,
         UUID documentId,
-        UUID documentCategoryId
+        UUID documentCategoryId,
+        boolean alreadyApplied
 ) {}

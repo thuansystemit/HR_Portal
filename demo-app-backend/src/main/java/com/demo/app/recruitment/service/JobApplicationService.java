@@ -1,6 +1,7 @@
 package com.demo.app.recruitment.service;
 
 import com.demo.app.cv.repository.CvCandidateRepository;
+import com.demo.app.cv.repository.CvTechnicalSkillRepository;
 import com.demo.app.platform.exception.ConflictException;
 import com.demo.app.platform.exception.ResourceNotFoundException;
 import com.demo.app.recruitment.dto.*;
@@ -9,6 +10,7 @@ import com.demo.app.recruitment.entity.JobApplication;
 import com.demo.app.recruitment.repository.ApplicationStageHistoryRepository;
 import com.demo.app.recruitment.repository.JobApplicationRepository;
 import com.demo.app.recruitment.repository.JobPostingRepository;
+import com.demo.app.recruitment.repository.JobPostingSkillRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +30,8 @@ public class JobApplicationService {
     private final ApplicationStageHistoryRepository stageHistoryRepository;
     private final CvCandidateRepository cvCandidateRepository;
     private final CandidateHiringStatusService hiringStatusService;
+    private final JobPostingSkillRepository jobPostingSkillRepository;
+    private final CvTechnicalSkillRepository cvTechnicalSkillRepository;
 
     public ApplicationResponse apply(UUID jobPostingId, CreateApplicationRequest req, UUID moverId) {
         var posting = jobPostingRepository.findById(jobPostingId)
@@ -119,14 +123,28 @@ public class JobApplicationService {
 
     private ApplicationResponse toResponse(JobApplication app) {
         var candidate = cvCandidateRepository.findById(app.getCvCandidateId()).orElse(null);
-        String fullName           = candidate != null ? candidate.getFullName()            : null;
-        String email              = candidate != null ? candidate.getEmail()               : null;
-        UUID   documentCategoryId = candidate != null ? candidate.getDocumentCategoryId()  : null;
+        String fullName           = candidate != null ? candidate.getFullName()           : null;
+        String email              = candidate != null ? candidate.getEmail()              : null;
+        UUID   documentCategoryId = candidate != null ? candidate.getDocumentCategoryId() : null;
         var    posting            = jobPostingRepository.findById(app.getJobPostingId()).orElse(null);
         String jobTitle           = posting != null ? posting.getTitle() : null;
+        Integer fitScore          = computeFitScore(app.getJobPostingId(), app.getCvCandidateId());
         return new ApplicationResponse(
                 app.getId(), app.getJobPostingId(), jobTitle, app.getCvCandidateId(),
                 documentCategoryId, fullName, email, app.getStage(), app.getNotes(),
-                app.getAppliedAt(), app.getUpdatedAt());
+                app.getAppliedAt(), app.getUpdatedAt(), fitScore);
+    }
+
+    private Integer computeFitScore(UUID jobPostingId, UUID cvCandidateId) {
+        var required = jobPostingSkillRepository.findByJobPostingId(jobPostingId);
+        if (required.isEmpty()) return null;
+        var candidateSkills = cvTechnicalSkillRepository.findByCvCandidateId(cvCandidateId)
+                .stream()
+                .map(s -> s.getSkillName().toLowerCase())
+                .collect(java.util.stream.Collectors.toSet());
+        long matched = required.stream()
+                .filter(s -> candidateSkills.contains(s.getSkillName().toLowerCase()))
+                .count();
+        return (int) Math.round(matched * 100.0 / required.size());
     }
 }

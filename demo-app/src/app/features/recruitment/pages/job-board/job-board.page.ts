@@ -1,5 +1,5 @@
 import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormBuilder, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { SHARED_IMPORTS } from '../../../../shared/shared.imports';
@@ -22,6 +22,7 @@ interface CvCandidateOption {
 })
 export class JobBoardPage implements OnInit {
   private readonly route   = inject(ActivatedRoute);
+  private readonly router  = inject(Router);
   private readonly fb      = inject(FormBuilder);
   private readonly http    = inject(HttpClient);
   private readonly api     = inject(RecruitmentApi);
@@ -122,6 +123,20 @@ export class JobBoardPage implements OnInit {
 
   getNextStages(current: AppStage): AppStage[] {
     return this.STAGE_ORDER.filter(s => s !== current);
+  }
+
+  protected fitScoreBadgeClass(score: number): string {
+    if (score >= 70) return 'bg-success';
+    if (score >= 40) return 'bg-warning text-dark';
+    return 'bg-danger';
+  }
+
+  // ── Find Candidates ─────────────────────────────────────────────────────────
+
+  findCandidates(): void {
+    this.router.navigate(['/cv-candidates/search'], {
+      queryParams: { forJobPostingId: this.jobId },
+    });
   }
 
   // ── Apply Candidate Modal ───────────────────────────────────────────────────

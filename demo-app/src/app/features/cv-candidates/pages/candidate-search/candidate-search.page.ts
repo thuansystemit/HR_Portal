@@ -2,7 +2,7 @@ import {
   Component, OnInit, TemplateRef, ViewChild, computed, inject, signal,
 } from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { SHARED_IMPORTS } from '../../../../shared/shared.imports';
 import { TableColumn, PageEvent } from '../../../../shared/components/data-table/data-table.model';
 import { CvSearchStore } from '../../store/cv-search.store';
@@ -19,6 +19,7 @@ import { JobPostingSummary } from '../../../recruitment/models/recruitment.model
 export class CandidateSearchPage implements OnInit {
   protected readonly store          = inject(CvSearchStore);
   private  readonly router         = inject(Router);
+  private  readonly route          = inject(ActivatedRoute);
   private  readonly fb             = inject(FormBuilder);
   private  readonly recruitmentApi = inject(RecruitmentApi);
 
@@ -33,6 +34,9 @@ export class CandidateSearchPage implements OnInit {
   protected total     = signal(0);
   protected pageCount = computed(() => Math.ceil(this.store.totalElements() / (this.store.pageSize() || 20)) || 1);
   protected hasSearched = signal(false);
+
+  /** Job posting context — set when navigated from Job List or Board */
+  protected forJobPostingId = signal<string | null>(null);
 
   /** Skill tag input state */
   protected skillTags  = signal<string[]>([]);
@@ -56,6 +60,21 @@ export class CandidateSearchPage implements OnInit {
       keyword:             [''],
       sortBy:              ['relevanceScore'],
     });
+
+    // Read job posting context from query params
+    const jobPostingId = this.route.snapshot.queryParams['forJobPostingId'] as string | undefined;
+    if (jobPostingId) {
+      this.forJobPostingId.set(jobPostingId);
+    }
+
+    // Read skills pre-filter from query params (navigated from Top Skills chart)
+    const skillsParam = this.route.snapshot.queryParams['skills'] as string | undefined;
+    if (skillsParam) {
+      const tags = skillsParam.split(',').map((s: string) => s.trim()).filter(Boolean);
+      this.skillTags.set(tags);
+      // auto-trigger search with a microtask to ensure form is ready
+      Promise.resolve().then(() => this.onSearch());
+    }
 
     this.columns.set([
       { key: 'relevanceScore', label: 'Score',       sortable: true, align: 'center', cellTemplate: this.scoreTpl },
@@ -107,6 +126,7 @@ export class CandidateSearchPage implements OnInit {
       sortBy: formVal.sortBy || 'relevanceScore',
       page: 0,
       size: 20,
+      forJobPostingId: this.forJobPostingId() ?? undefined,
     };
     this.hasSearched.set(true);
     this.page.set(1);

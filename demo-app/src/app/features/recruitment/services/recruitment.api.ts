@@ -8,6 +8,7 @@ import {
   Feedback,
   Interview,
   JobPosting,
+  JobPostingSkill,
   JobPostingSummary,
   Page,
 } from '../models/recruitment.model';
@@ -39,6 +40,14 @@ export class RecruitmentApi {
 
   deletePosting(id: string): Observable<void> {
     return this.http.delete<void>(`${this.base}/job-postings/${id}`);
+  }
+
+  getPostingSkills(id: string): Observable<JobPostingSkill[]> {
+    return this.http.get<JobPostingSkill[]>(`${this.base}/job-postings/${id}/skills`);
+  }
+
+  setPostingSkills(id: string, skills: JobPostingSkill[]): Observable<JobPostingSkill[]> {
+    return this.http.put<JobPostingSkill[]>(`${this.base}/job-postings/${id}/skills`, skills);
   }
 
   // ── Applications ────────────────────────────────────────────────────────────

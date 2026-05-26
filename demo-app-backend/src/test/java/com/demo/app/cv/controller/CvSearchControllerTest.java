@@ -34,7 +34,7 @@ class CvSearchControllerTest {
                 UUID.randomUUID(), name, name.toLowerCase().replace(" ", "") + "@example.com",
                 "Hanoi", "Vietnam", "Senior Developer", 5.0,
                 List.of("Java", "Spring"), score,
-                UUID.randomUUID(), UUID.randomUUID()
+                UUID.randomUUID(), UUID.randomUUID(), false
         );
     }
 
@@ -44,7 +44,7 @@ class CvSearchControllerTest {
         var page = new PageImpl<>(List.of(result), PageRequest.of(0, 20), 1);
         when(searchService.search(any(CvSearchCriteria.class))).thenReturn(page);
 
-        var response = controller.search("Java,Spring", "Developer", null, null, null, null, null, null);
+        var response = controller.search("Java,Spring", "Developer", null, null, null, null, null, null, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
@@ -59,7 +59,7 @@ class CvSearchControllerTest {
         var page = new PageImpl<CvSearchResultResponse>(List.of(), PageRequest.of(0, 20), 0);
         when(searchService.search(any(CvSearchCriteria.class))).thenReturn(page);
 
-        var response = controller.search(null, null, null, null, null, null, null, null);
+        var response = controller.search(null, null, null, null, null, null, null, null, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
@@ -71,7 +71,7 @@ class CvSearchControllerTest {
         var page = new PageImpl<CvSearchResultResponse>(List.of(), PageRequest.of(2, 15), 0);
         when(searchService.search(any(CvSearchCriteria.class))).thenReturn(page);
 
-        var response = controller.search(null, null, null, null, null, 2, 15, "fullName");
+        var response = controller.search(null, null, null, null, null, 2, 15, "fullName", null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         verify(searchService).search(any(CvSearchCriteria.class));
@@ -82,7 +82,7 @@ class CvSearchControllerTest {
         var page = new PageImpl<CvSearchResultResponse>(List.of(), PageRequest.of(0, 20), 0);
         when(searchService.search(any(CvSearchCriteria.class))).thenReturn(page);
 
-        var response = controller.search(null, null, null, 5, "cloud", null, null, null);
+        var response = controller.search(null, null, null, 5, "cloud", null, null, null, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         verify(searchService).search(any(CvSearchCriteria.class));
@@ -94,9 +94,27 @@ class CvSearchControllerTest {
         var page = new PageImpl<>(List.of(result), PageRequest.of(0, 20), 1);
         when(searchService.search(any(CvSearchCriteria.class))).thenReturn(page);
 
-        var response = controller.search(null, null, "Vietnam", null, null, null, null, null);
+        var response = controller.search(null, null, "Vietnam", null, null, null, null, null, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().getContent().get(0).country()).isEqualTo("Vietnam");
+    }
+
+    @Test
+    void search_withForJobPostingId_passesIdToService() {
+        UUID jobPostingId = UUID.randomUUID();
+        var result = new CvSearchResultResponse(
+                UUID.randomUUID(), "Bob Smith", "bob@example.com",
+                "Hanoi", "Vietnam", "Developer", 3.0,
+                List.of("Java"), 70, UUID.randomUUID(), UUID.randomUUID(), true
+        );
+        var page = new PageImpl<>(List.of(result), PageRequest.of(0, 20), 1);
+        when(searchService.search(any(CvSearchCriteria.class))).thenReturn(page);
+
+        var response = controller.search(null, null, null, null, null, null, null, null, jobPostingId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().getContent().get(0).alreadyApplied()).isTrue();
+        verify(searchService).search(any(CvSearchCriteria.class));
     }
 }

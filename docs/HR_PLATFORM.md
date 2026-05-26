@@ -2,7 +2,7 @@
 
 > **Audience:** HR team, product owner, development team
 > **Delivery strategy:** Incremental — one epic at a time, ship as each is production-ready
-> **Last updated:** 2026-05-25
+> **Last updated:** 2026-05-26
 > **Status:** Living document — update as features are delivered and gaps are closed
 
 ---
@@ -121,7 +121,7 @@ The complete hiring lifecycle as driven by three actors: **Dev Team (Requester)*
 
 ### Detailed Step Descriptions
 
-**Step 1 — Hiring Request.** A Dev Team member (the Requester) identifies a staffing need and submits a hiring request **via the platform** using a dedicated form. The form captures role type (Frontend / Backend / Fullstack), description of the need, urgency (Normal / Urgent), and department. The Dev Team member can then track the status of their submitted requests (Pending / In Progress / Candidate Found / Hired / Closed) from a "My Requests" dashboard. **NOTE:** There is currently no system support for this step — requests arrive via email, Slack, or verbal communication (see Gap G14). The platform should provide this formal request submission form and Dev Team dashboard.
+**Step 1 — Hiring Request.** A Dev Team member (the Requester) identifies a staffing need and submits a hiring request **via the platform** using a dedicated form (Sidebar › Dev Team › My Requests › New Request). The form captures role type (Frontend / Backend / Fullstack), title, description, urgency (Low / Medium / High / Critical), and department. On submission, all HR and Administrator users receive an in-app bell notification. The Dev Team member can track the status of their requests from the "My Requests" dashboard — with status filter chips (All / Pending / In Progress / Candidate Found / Hired / Closed / Rejected), live counts per status, and a 4-step progress bar (Pending → In Progress → Candidate Found → Hired) on each request's detail page. ✅ **WF-16 + WF-19 RESOLVED 2026-05-26.**
 
 **Step 2 — Job Posting.** HR receives the hiring request from the Dev Team and creates a job posting with title, department, location, description, requirements, and deadline. Postings go through a lifecycle: Draft (not visible) → Open (accepting applications) → Closed. The job posting is the system's formalization of the Dev Team's request.
 
@@ -139,9 +139,9 @@ The complete hiring lifecycle as driven by three actors: **Dev Team (Requester)*
 
 **Step 6 — Application.** HR applies shortlisted candidates to the job posting. Two paths: (a) from Candidate Search results via the "Apply to Job" button, which opens a modal to select an open posting; or (b) from the Kanban board via the "Apply Candidate" action. Each job posting has a Kanban board with pipeline stages (Applied → Screening → Interview → Offer → Hired / Rejected). Applying or moving a stage automatically recalculates the candidate's `hiring_status` (Step 5.7).
 
-**Step 7 — Interview Scheduling.** HR schedules interviews for shortlisted candidates, assigning an Interviewer from the Dev Team. The Interviewer is typically the Dev Team member who submitted the original hiring request (Step 1), or a peer they nominate — their identity is already known from the hiring request and CV review steps. The system captures date/time, meeting link, interviewer assignment, and notes. **NOTE:** The system does not yet send notifications to the assigned Interviewer (see Gap G6 — now CRITICAL given the Interviewer is a Dev Team member who must be informed).
+**Step 7 — Interview Scheduling.** HR schedules interviews for shortlisted candidates, assigning an Interviewer from the Dev Team. The Interviewer is typically the Dev Team member who submitted the original hiring request (Step 1), or a peer they nominate — their identity is already known from the hiring request and CV review steps. The system captures date/time, meeting link, interviewer assignment, and notes. When an Interviewer is assigned, the system automatically sends an in-app notification to them with the interview details. ✅ **G6 RESOLVED 2026-05-26** — `InterviewService.schedule()` sends notification via `NotificationService`; bell badge updates in real time.
 
-**Step 8 — Interview and Feedback.** The assigned Interviewer (a Dev Team member) conducts the interview and submits structured feedback via the platform: a 1-5 rating, written notes, and a recommendation (Pass / Hold / Reject). A consolidated view aggregates all assessments per interview. **NOTE:** HR is not yet notified when feedback is submitted (see Gap G13 — now CRITICAL).
+**Step 8 — Interview and Feedback.** The assigned Interviewer (a Dev Team member) conducts the interview and submits structured feedback via the platform: a 1-5 rating, written notes, and a recommendation (Pass / Hold / Reject). A consolidated view aggregates all assessments per interview. When feedback is submitted, the system automatically notifies all HR and Administrator users so they can proceed to the hiring decision. ✅ **G13 RESOLVED 2026-05-26** — `InterviewService.submitFeedback()` notifies all HR + Admin users via `NotificationService`.
 
 **Step 9 — Hiring Decision.** HR reviews the Interviewer's feedback. If feedback is positive (Pass recommendation), HR moves the candidate toward hiring. If feedback is negative (Reject), HR either rejects the candidate or loops back to Step 5 to consider other candidates. Candidates with a Hold recommendation may be re-interviewed or placed in a talent pool.
 
@@ -258,12 +258,12 @@ Document Management uses per-category role visibility (canView, canUpload, canDe
 
 | Activity | System Feature | Status |
 |----------|---------------|--------|
-| Dev Team submits hiring request via platform (role type, description, urgency, department) | **Not built** — planned: Dev Team request form with fields for role type (Frontend/Backend/Fullstack), description, urgency (Normal/Urgent), department | 🔲 GAP G14 (WF-16) |
-| Dev Team tracks status of submitted requests (Pending / In Progress / Candidate Found / Hired / Closed) | **Not built** — planned: "My Requests" dashboard for Dev Team showing all submitted requests with live status | 🔲 GAP G14 (WF-19) |
-| HR receives and reviews request queue | **Not built** — planned: HR-facing request queue with filters by status, urgency, department | 🔲 GAP G14 |
-| HR approves request and converts to job posting | **Not built** — planned: "Convert to Job Posting" action that pre-fills posting fields from request data | 🔲 GAP G14 |
+| Dev Team submits hiring request via platform (role type, description, urgency, department) | `HiringRequestController` — `POST /api/v1/hiring-requests`; `request-form.page`; HR notified on submission | ✅ WF-16 RESOLVED 2026-05-26 |
+| Dev Team tracks status of submitted requests with filter and progress view | `RequestListPage` — `GET /api/v1/hiring-requests/my`; status filter chips (All / per-status with live counts); 4-step progress bar on detail page (Pending → In Progress → Candidate Found → Hired) | ✅ WF-19 RESOLVED 2026-05-26 |
+| HR receives and reviews request queue | `Hiring Requests` page — `GET /api/v1/hiring-requests`; HR + Admin + Manager receive in-app notification on new submission | ✅ |
+| HR approves request and converts to job posting | `link-posting` action on Request Detail — `PATCH /hiring-requests/{id}/link-posting?jobPostingId=`; advances status PENDING → IN_PROGRESS | ✅ WF-16 |
 
-**Path:** Not yet implemented — currently handled via email/Slack/verbal communication. Planned: Sidebar > Dev Team > My Requests > Submit New Request
+**Path:** Sidebar > Dev Team > My Requests (Dev Team) · Sidebar > Hiring > Hiring Requests (HR/Admin/Manager)
 
 **Actor:** Dev Team (Requester)
 
@@ -276,7 +276,7 @@ Document Management uses per-category role visibility (canView, canUpload, canDe
 | Create job posting (title, dept, location, requirements, deadline) | Job Form page | ✅ |
 | Manage posting lifecycle (Draft / Open / Closed) | Job List with status filter | ✅ |
 | Edit existing posting | Job Form (edit mode) | ✅ |
-| Add structured required skills to a posting | Not built — requirements is free text only | 🔲 GAP G3 (WF-9) |
+| Add structured required skills to a posting | Implemented — skill tag input on job form; `job_posting_skills` table (V23); `GET/PUT /{id}/skills` | ✅ WF-9 |
 | Link posting back to hiring request | Not built — no hiring request entity exists | 🔲 GAP G14 |
 
 **Path:** Sidebar › Hiring › Job Postings › New Job Posting
@@ -322,9 +322,9 @@ Document Management uses per-category role visibility (canView, canUpload, canDe
 | Free-text keyword search | Keyword parameter in search API | ✅ |
 | View candidate profile (skills, work history, education) | Candidate Detail page | ✅ |
 | View candidate's application history across postings | Application History section on profile | ✅ Sprint 1 |
-| Search candidates in context of a specific job posting | Not yet built | 🔲 GAP G1 (WF-4) |
-| See which candidates already applied to a posting | Not yet built | 🔲 GAP G2 (WF-5) |
-| Auto-suggest candidates based on skill match to posting | Not built | 🔲 GAP (WF-10) |
+| Search candidates in context of a specific job posting | `forJobPostingId` query param; info banner; "Find Candidates" button on Job Board/List navigates with context | ✅ WF-4 RESOLVED 2026-05-26 |
+| See which candidates already applied to a posting | `alreadyApplied` field on search results; "Applied" badge in actions column | ✅ WF-5 RESOLVED 2026-05-26 |
+| Auto-suggest candidates based on skill match to posting | Implemented — `fitScore` field on `ApplicationResponse`; color-coded fit badge (green/yellow/red) on each Kanban card; computed from `job_posting_skills` vs. candidate technical skills (case-insensitive) | ✅ WF-10 |
 
 **Path:** Sidebar › Hiring › Candidates › Search form
 
@@ -388,14 +388,14 @@ Document Management uses per-category role visibility (canView, canUpload, canDe
 | Apply candidate to job from search results | "Apply to Job" button per search result row | ✅ Sprint 1 |
 | Apply candidate from Kanban board | "Apply Candidate" action on Job Board | ✅ |
 | Batch-apply multiple candidates | Not built | 🔲 GAP G4 (WF-11) |
-| Prevent duplicate applications — "already applied" indicator | Not built | 🔲 GAP G2 (WF-5) |
+| Prevent duplicate applications — "already applied" indicator | `alreadyApplied` bool on search results; "Applied" badge when searching in posting context | ✅ WF-5 |
 | View candidates per stage on Kanban board | Job Board columns: Applied → Screening → Interview → Offer → Hired / Rejected | ✅ |
 | Move candidate between stages with notes | Angular signal-controlled dropdown (position:fixed to escape overflow clipping); stage transition with audit log | ✅ |
 | hiring_status auto-updated on stage change | `CandidateHiringStatusService.recalculate()` runs in same transaction as every stage move | ✅ V20 |
 | View stage transition history (who moved, when, notes) | Stage history log | ✅ |
 | View candidate profile from Kanban card | Clickable candidate name → Candidate Detail | ✅ Sprint 1 |
 | View pipeline health stats on board header | Pipeline stats (total, in-pipeline, hired, hire rate) | ✅ Sprint 1 |
-| Per-posting analytics (funnel, conversion, time metrics) on board | Not built — analytics are aggregate-only | 🔲 GAP G5 (WF-7) |
+| Per-posting analytics (funnel, conversion, time metrics) on board | Implemented — `app-dropdown` filter on HR Analytics page scopes all 5 charts to one posting | ✅ WF-7 |
 
 **Path:** Candidates › Search › "Apply to Job", OR Job Board › "Apply Candidate"
 
@@ -414,8 +414,8 @@ Document Management uses per-category role visibility (canView, canUpload, canDe
 | Pre-populate interviewer from hiring request's requester | **Not built** — planned: auto-suggest the requester as default interviewer | 🔲 GAP G14 (dependency) |
 | View scheduled interviews | Interview list per application | ✅ |
 | Cancel or reschedule interview | Interview management | ✅ |
-| **Send notification to assigned Interviewer** | **Not built — Interviewer has no way to know they are scheduled** | 🔲 **GAP G6 (CRITICAL)** |
-| Send interview invitation email to candidate | Not built | 🔲 GAP G6 |
+| **Send in-app notification to assigned Interviewer** | `InterviewService.schedule()` → `NotificationService.send()` — bell badge + dropdown | ✅ **G6 RESOLVED 2026-05-26** |
+| Send interview invitation email to candidate | Not built | 🔲 GAP (deferred) |
 | Calendar integration (Google, Outlook) | Not built | 🔲 GAP (deferred) |
 
 **Path:** Job Board › candidate card › Schedule Interview
@@ -432,7 +432,7 @@ Document Management uses per-category role visibility (canView, canUpload, canDe
 | Submit feedback (1-5 rating, notes, recommendation: Pass / Hold / Reject) | Interview feedback form | ✅ |
 | View consolidated feedback per interview | Aggregated feedback view | ✅ |
 | Compare feedback across multiple interviewers | Consolidated view shows all assessments | ✅ |
-| **Notify HR when feedback is submitted** | **Not built — HR must manually check for new feedback** | 🔲 **GAP G13 (CRITICAL)** |
+| **Notify HR when feedback is submitted** | `InterviewService.submitFeedback()` → notifies all HR + Admin users | ✅ **G13 RESOLVED 2026-05-26** |
 | Automated scoring/recommendation aggregation | Not built — manual review only | 🔲 GAP |
 
 **Path:** Job Board › candidate card › Interview › Submit Feedback
@@ -467,7 +467,7 @@ Document Management uses per-category role visibility (canView, canUpload, canDe
 | **Initiate onboarding preparation checklist** | **Not built** | 🔲 **GAP G8 (MEDIUM)** |
 | Create employee record | Not built | 🔲 GAP G8 (deferred) |
 | Auto-close posting when position is filled | Not built — manual close only | 🔲 GAP G9 |
-| Notify Dev Team (Requester) that position is filled | Not built | 🔲 GAP G13 |
+| Notify Dev Team (Requester) that position is filled | Not built | 🔲 GAP (deferred) |
 
 **Path:** Job Board › move candidate card to "Hired" column
 
@@ -484,8 +484,10 @@ Document Management uses per-category role visibility (canView, canUpload, canDe
 | Top 15 skills in candidate pool | Top skills bar chart | ✅ |
 | Monthly application volume trend (12-month rolling) | Area chart | ✅ |
 | Stage conversion rates | Conversion rate visualization | ✅ |
-| Filter analytics by specific job posting | Not built — aggregate only | 🔲 GAP G11 (WF-7) |
-| Drill down from chart to underlying data | Not built — charts are static | 🔲 GAP G10 (WF-6, WF-12, WF-13) |
+| Filter analytics by specific job posting | Implemented — `app-dropdown` on Analytics page; all 5 endpoints accept `?jobPostingId` | ✅ WF-7 |
+| Funnel bar click → Job List with stage context banner | Implemented — `funnelOptions` `point.events.click` → `/recruitment?highlightStage=<STAGE>` | ✅ WF-6 |
+| Top Skills bar click → Candidate Search pre-filled | Implemented — `topSkillsOptions` click → `/cv-candidates/search?skills=<skill>`, auto-search | ✅ WF-12 |
+| Time-to-hire column click → Kanban board | Not built — `TimeToHireEntry` has no `jobPostingId` | 🔲 GAP G10 (WF-13) |
 | Export reports (PDF, Excel) | Not built | 🔲 GAP G12 |
 
 **Path:** Sidebar › Hiring › Pipeline Analytics
@@ -503,17 +505,17 @@ Document Management uses per-category role visibility (canView, canUpload, canDe
 | **G14** | **Hiring Request** | **No system support for Dev Team to submit hiring requests or track their status — currently done via email/Slack/verbal. Also needs Dev Team dashboard showing request status and shared CVs.** | **CRITICAL** | **2026-05-24** |
 | G1 | Discovery / Requisition | No job-context-aware candidate search — cannot search "for" a specific posting | HIGH | |
 | G2 | Discovery / Application | Search results do not indicate already-applied candidates | MEDIUM | |
-| G3 | Requisition | Job requirements are free text, not structured skills — no auto-matching | HIGH | |
+| ~~G3~~ | ~~Requisition~~ | ~~Job requirements are free text, not structured skills — no auto-matching~~ | ~~HIGH~~ | **✅ RESOLVED 2026-05-26** — WF-9: `job_posting_skills` table (V23), `JobPostingSkillDto`, `GET/PUT /{id}/skills`, skill tag input on job form |
 | G4 | Application | No batch-apply for multiple candidates at once | LOW | |
-| G5 | Screening | No per-posting analytics on the Kanban board | MEDIUM | |
-| **G6** | **Interview** | **No notification to Interviewer when interview is scheduled — Interviewer is a Dev Team member who must be informed by the system** | **CRITICAL** | **2026-05-24** |
+| ~~G5~~ | ~~Screening~~ | ~~No per-posting analytics on the Kanban board~~ | ~~MEDIUM~~ | **✅ RESOLVED 2026-05-26** — WF-7: `app-dropdown` filter on HR Analytics scopes all 5 charts to a single job posting |
+| ~~G6~~ | ~~Interview~~ | ~~No notification to Interviewer when interview is scheduled~~ | ~~CRITICAL~~ | **✅ RESOLVED 2026-05-26** — `InterviewService.schedule()` sends in-app notification to the assigned Interviewer via `NotificationService`; `notifications` table (V22); bell badge + dropdown in header |
 | G7 | Offer | No offer letter generation or offer term tracking | MEDIUM | |
 | G8 | Hired / Onboarding | No onboarding workflow or employee record creation — final step of the hiring process has no system support | MEDIUM | 2026-05-24 |
 | G9 | Hired | Job posting not auto-closed when position is filled | LOW | |
-| G10 | Analytics | Charts are static — no drill-down to underlying candidate records | MEDIUM | |
-| G11 | Analytics | No per-posting filter on HR Analytics — aggregate metrics only | MEDIUM | |
+| ~~G10~~ | ~~Analytics~~ | ~~Charts are static — no drill-down to underlying candidate records~~ | ~~MEDIUM~~ | **✅ PARTIALLY RESOLVED 2026-05-26** — WF-6 (funnel → recruitment + stage banner) and WF-12 (skill → candidate search auto-filled) done. WF-13 (time-to-hire → Kanban) still open — needs `jobPostingId` in `TimeToHireEntry` |
+| ~~G11~~ | ~~Analytics~~ | ~~No per-posting filter on HR Analytics — aggregate metrics only~~ | ~~MEDIUM~~ | **✅ RESOLVED 2026-05-26** — WF-7: optional `jobPostingId` on all 5 analytics endpoints; `app-dropdown` in `HrAnalyticsPage` |
 | G12 | Analytics | No report export (PDF, Excel) | LOW | |
-| **G13** | **Cross-cutting** | **No notifications for stage changes or feedback submissions — HR has no way to know when an Interviewer submits feedback without manually checking** | **CRITICAL** | **2026-05-24** |
+| ~~G13~~ | ~~Cross-cutting~~ | ~~No notifications for feedback submissions — HR has no way to know when an Interviewer submits feedback~~ | ~~CRITICAL~~ | **✅ RESOLVED 2026-05-26** — `InterviewService.submitFeedback()` notifies all HR + Administrator users; `HiringRequestService.create()` notifies HR + Admin on new request submission |
 | ~~G15~~ | ~~CV Sharing~~ | ~~No CV sharing mechanism — HR cannot share a candidate's CV profile with the Dev Team.~~ | ~~CRITICAL~~ | **✅ RESOLVED 2026-05-25** — `cv_shares` table (V18), `CvShareService`, HR share panel on request detail, Dev Team Shared CVs inbox (`cv-shares` route) |
 | ~~G16~~ | ~~CV Review~~ | ~~No preliminary impression / CV review step for Dev Team.~~ | ~~CRITICAL~~ | **✅ RESOLVED 2026-05-25** — `CvShareDetailPage` with impression form; HR sees impression badges on hiring request detail |
 
@@ -521,13 +523,13 @@ Document Management uses per-category role visibility (canView, canUpload, canDe
 
 ### 4.2 Detailed Gap Descriptions
 
-#### G1 + G3 — Job-to-Candidate Matching (HIGH, compound)
+#### ~~G1 + G3~~ — Job-to-Candidate Matching — ✅ PARTIALLY RESOLVED 2026-05-26
 
-**What users try to do:** An HR officer creates a job posting for "Senior Java Developer in Berlin" and wants to immediately find matching candidates.
+**~~G3~~ RESOLVED:** `job_posting_skills` table (V23 migration), `JobPostingSkill` entity + repository, `JobPostingSkillDto`, `GET/PUT /api/v1/recruitment/job-postings/{id}/skills`. Job form has a skill tag input that loads existing skills on edit and saves via `switchMap` after create/update. V23 deployed in Docker.
 
-**What happens today:** After creating a posting, the user lands on the Job List with no link to Candidate Search. They must manually navigate to search, re-type the skills from the posting's requirements field, enter the location, and run the search. The `JobPosting.requirements` column is free text (`TEXT`), not structured data, so there is no automated bridge between job requirements and search criteria.
+**~~G1~~ RESOLVED (WF-4, Sprint 2):** "Find Candidates" button on Job List and Kanban board navigates to Candidate Search with `forJobPostingId` context.
 
-**Ideal experience:** Job postings should have a structured `required_skills` field (tag input, same pattern as Candidate Search). A "Find Candidates" button on the Kanban board should pre-populate the search form with the posting's skills and location. This requires two stories: WF-9 (structured skills on job form) and WF-4 (Find Candidates button).
+**~~WF-10~~ RESOLVED 2026-05-26:** `fitScore: Integer` added to `ApplicationResponse` record. `JobApplicationService.toResponse()` calls `computeFitScore(jobPostingId, cvCandidateId)` — fetches required skills from `job_posting_skills`, fetches candidate skills from `cv_technical_skills`, counts case-insensitive matches, returns `Math.round(matched * 100.0 / required.size())` or `null` when posting has no required skills. Frontend: `fitScore: number | null` on `Application` interface; `fitScoreBadgeClass()` method on `job-board.page.ts`; color-coded `% fit` badge on each Kanban card (green ≥70%, yellow ≥40%, red &lt;40%).
 
 ---
 
@@ -541,7 +543,7 @@ Document Management uses per-category role visibility (canView, canUpload, canDe
 
 ---
 
-#### G3 — Unstructured Job Requirements (HIGH) — see G1+G3 above
+#### ~~G3~~ — Unstructured Job Requirements — ✅ RESOLVED 2026-05-26 — see G1+G3 above
 
 ---
 
@@ -565,15 +567,18 @@ Document Management uses per-category role visibility (canView, canUpload, canDe
 
 ---
 
-#### G6 — No Interview Notifications (CRITICAL — updated 2026-05-24)
+#### ~~G6~~ — Interview Notifications — ✅ RESOLVED 2026-05-26
 
-**Why CRITICAL:** In the revised workflow, the Interviewer is a Dev Team member who is assigned by HR to conduct the interview. They are NOT actively monitoring the recruitment pipeline. Without system notification, the Interviewer has no way to know they have been scheduled unless HR manually contacts them via Slack/email outside the platform. This breaks the workflow at Step 7 → Step 8.
+**What was missing:** No notification to the Interviewer when an interview was scheduled. Interviewers learned about assignments through external channels (Slack, email from HR).
 
-**What users try to do:** HR schedules an interview and assigns a Dev Team member as Interviewer. The Interviewer should be automatically notified with meeting details.
+**How it was resolved:**
+- **`V21` Flyway migration** — added nullable `interviewer_id UUID` column to `interviews` table
+- **`InterviewService.schedule()`** — after saving the interview, if `interviewerId != null`, calls `notificationService.send(interviewerId, "Interview Scheduled", <date + meeting link details>)`
+- **`NotificationService` / `NotificationController`** — `GET /api/v1/notifications`, `GET /api/v1/notifications/unread-count`, `PATCH /api/v1/notifications/{id}/read`
+- **`V22` Flyway migration** — `notifications` table (`id`, `recipient_id`, `title`, `body`, `is_read`, `created_at`, `read_at`) with unread partial index
+- **Frontend header bell** — polls unread count every 30s; dropdown shows notifications with "Mark read" per item; unread items highlighted
 
-**What happens today:** The system captures date, time, meeting link, and notes for each interview, but nothing is sent. Interviewers learn about interviews through external channels (email, Slack, calendar invites created manually by HR).
-
-**Ideal experience:** When HR schedules an interview and assigns an Interviewer, the system sends an in-app notification AND email to the Interviewer with: candidate name, role, date/time, meeting link, and a direct link to the candidate's profile. Requires SMTP relay integration (already referenced in the platform architecture) and wiring to the existing notification infrastructure (`notifications` table).
+**Remaining gap:** Email notification to Interviewer is not yet wired (requires SMTP relay). In-app notification is live.
 
 ---
 
@@ -601,19 +606,21 @@ When a candidate is hired, the job posting remains "Open" unless manually closed
 
 ---
 
-#### G10 — Static Analytics Charts (MEDIUM)
+#### ~~G10~~ — Static Analytics Charts — ✅ PARTIALLY RESOLVED 2026-05-26
 
-**What happens today:** All five charts on the HR Analytics page are read-only Highcharts visualizations with no click handlers. `HrAnalyticsPage` has no `Router` injection. Clicking a funnel bar, a time-to-hire column, or a skill bar does nothing.
+**WF-6 done:** `HrAnalyticsPage` now injects `Router` + `NgZone`. `funnelOptions` computed has `plotOptions.bar.point.events.click` → navigates to `/recruitment?highlightStage=<STAGE>`. `JobListPage` reads the query param and shows a dismissible info banner: "open any Kanban board to see candidates in the &lt;STAGE&gt; stage."
 
-**Ideal experience:** Funnel bars → navigate to filtered list of candidates in that stage. Time-to-hire columns → open that posting's Kanban board. Top skills bars → open Candidate Search pre-filled with that skill. Requires Highcharts `point.events.click` handlers and router navigation.
+**WF-12 done:** `topSkillsOptions` click handler navigates to `/cv-candidates/search?skills=<skillName>`. `CandidateSearchPage.ngOnInit()` reads the `skills` query param, pre-populates `skillTags`, and auto-triggers `onSearch()` via `Promise.resolve().then(...)`.
+
+**WF-13 still open:** `TimeToHireEntry` exposes only `jobTitle` and `avgDays` — no `jobPostingId`. Backend must add `jobPostingId: UUID` to `TimeToHireEntry` and the SQL query before the chart bar can link to `/recruitment/:id/board`.
 
 ---
 
-#### G11 — No Per-Posting Analytics Filter (MEDIUM)
+#### ~~G11~~ — Per-Posting Analytics Filter — ✅ RESOLVED 2026-05-26
 
-**What happens today:** All five `HrAnalyticsService` queries aggregate across all job postings. There is no `WHERE job_posting_id = ?` clause in any of the five analytics SQL statements.
+**Backend:** All five `HrAnalyticsService` methods accept `@Nullable UUID jobPostingId`. SQL conditionally appends `WHERE job_posting_id = :jobPostingId` (or equivalent subquery for `topSkills`). All five controller endpoints expose `@RequestParam(required = false) UUID jobPostingId`. 428 tests pass, JaCoCo gate satisfied.
 
-**Ideal experience:** A job posting dropdown on the analytics page filters all charts to show metrics for one posting. Requires an optional `jobPostingId` query param on all five analytics endpoints.
+**Frontend:** `HrAnalyticsApi` passes `HttpParams` with `jobPostingId` when set. `HrAnalyticsStore` exposes `selectedJobPostingId` signal and `selectJobPosting(id)` which re-fetches all five charts. `HrAnalyticsPage` renders an `<app-dropdown>` (the standard shared component) above the KPI cards, populated with open job postings; selecting one scopes all charts; selecting "All job postings" resets to aggregate view.
 
 ---
 
@@ -623,16 +630,20 @@ Charts and tables cannot be exported. Analytics insights cannot be shared in lea
 
 ---
 
-#### G13 — No Stage Change / Feedback Notifications (CRITICAL — updated 2026-05-24)
+#### ~~G13~~ — Feedback and Hiring Request Notifications — ✅ RESOLVED 2026-05-26
 
-**Why CRITICAL:** In the revised workflow, the handoff between Interviewer (Step 8) and HR (Step 9) depends entirely on HR being notified when feedback is submitted. Without this notification, HR must manually poll the system to check if the Interviewer has completed their feedback. This creates a bottleneck at the most critical decision point in the workflow.
+**What was missing:** HR had no way to know when an Interviewer submitted feedback (Step 8 → Step 9 handoff). Also, HR received no alert when a Dev Team member submitted a new hiring request (Step 1 → Step 2 handoff).
 
-**What happens today:** When a candidate moves stages, or an interview is scheduled, or feedback is submitted — only the person taking the action knows. The notification infrastructure exists in the database schema (`notifications`, `push_subscriptions` tables) and is referenced in the architecture docs, but it has not been wired to recruitment domain events.
+**How it was resolved:**
+- **Feedback → HR notification:** `InterviewService.submitFeedback()` calls `notifyHrAboutFeedback()` after saving — iterates over all users with the `HR` and `Administrator` roles (via `RoleRepository.findByName()` + `UserRepository.findActiveByRoleId()`) and calls `notificationService.send()` for each
+- **New hiring request → HR notification:** `HiringRequestService.create()` calls `notifyHrAboutNewRequest()` after saving — same role-fan-out pattern; notification body includes role type, title, and urgency
+- **Notification infrastructure:** `NotificationService`, `NotificationController`, `NotificationRepository`, `Notification` entity, `V22` migration — all wired end-to-end
+- **Frontend:** Header bell polls unread count; dropdown lists notifications with timestamp and "Mark read" action
 
-**Ideal experience:** Domain events (stage moved, interview scheduled, feedback submitted) should be published and consumed by a notification service that sends in-app and email notifications to relevant stakeholders. Priority notifications:
-1. **Feedback submitted** → notify HR (enables Step 9 — Hiring Decision)
-2. **Interview scheduled** → notify Interviewer (enables Step 8 — covered by G6)
-3. **Stage changed** → notify HR Manager for visibility
+**Remaining gaps (deferred):**
+- Stage-change notifications (Applied → Screening → Interview etc.) — not yet wired; lower priority since HR actively manages the board
+- Email delivery — SMTP relay not yet integrated; in-app notifications are live
+- Notify Dev Team Requester when their position is filled — not yet implemented
 
 ---
 
@@ -703,21 +714,9 @@ CREATE INDEX idx_hiring_requests_status ON hiring_requests(status);
 
 ### 4.3 Data Model Gaps
 
-#### Missing: Structured skills on `job_postings`
+#### ~~Missing: Structured skills on `job_postings`~~ — ✅ RESOLVED 2026-05-26
 
-`JobPosting.requirements` is free text (`TEXT`). No `job_posting_skills` table exists. Required for G1, G3, WF-4, WF-9, WF-10, and skill-demand analytics.
-
-```sql
-CREATE TABLE job_posting_skills (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    job_posting_id  UUID NOT NULL REFERENCES job_postings(id) ON DELETE CASCADE,
-    skill_name      VARCHAR(100) NOT NULL,
-    is_required     BOOLEAN DEFAULT true,
-    UNIQUE (job_posting_id, skill_name)
-);
-CREATE INDEX idx_job_posting_skills_posting ON job_posting_skills(job_posting_id);
-CREATE INDEX idx_job_posting_skills_name    ON job_posting_skills(skill_name);
-```
+`job_posting_skills` table delivered in **V23** migration (with `IF NOT EXISTS`, `CASCADE` FK, unique constraint on `(job_posting_id, skill_name)`, both indexes). `JobPostingSkill` entity, `JobPostingSkillRepository`, `JobPostingSkillDto`, and `GET/PUT /{id}/skills` endpoints are all live. Frontend skill tag input on job form saves via `setPostingSkills()`. Unblocks WF-10 (job fit scoring).
 
 #### ~~Missing: `cv_shares` table for CV sharing and Dev Team impressions~~ — ✅ RESOLVED 2026-05-25
 
@@ -733,7 +732,7 @@ CREATE INDEX idx_job_posting_skills_name    ON job_posting_skills(skill_name);
 
 #### Missing: `jobPostingId` on analytics DTOs
 
-`TimeToHireEntry` returns `jobTitle` and `avgDays` only; `FunnelStageEntry` has no job-level breakdown. Required for G10, G11, WF-7, WF-13. Fix: add `jobPostingId: UUID` to `TimeToHireEntry`; add optional `jobPostingId` filter to all five analytics endpoints.
+`TimeToHireEntry` returns `jobTitle` and `avgDays` only — no `jobPostingId`. Required for WF-13 (click time-to-hire bar → open Kanban board). Fix: add `jobPostingId: UUID` to `TimeToHireEntry` and its SQL query. ~~G11 and WF-7 are now resolved~~ — the per-posting filter was delivered via the `jobPostingId` query param on all five endpoints.
 
 ---
 
@@ -828,7 +827,7 @@ Phase 3 (DONE) ─── Epic 3: HR Analytics Dashboard ────────
 
 Sprint 1 (DONE) ── Integration stories (workflow bridges) ─────── ✅ WF-1, WF-2, WF-3, WF-8, Sidebar
 
-Sprint 2 (IN PROGRESS) ── Dev Team UI + critical workflow gaps
+Sprint 2 (DONE) ──── Dev Team UI + critical workflow gaps
                     ✅ WF-17: CV Sharing (HR shares candidate with Dev Team)
                     ✅ WF-18: CV Review & Preliminary Impression (Dev Team)
                     ✅ HS-1:  Candidate Hiring Status (V20) — auto-recalculation,
@@ -837,17 +836,21 @@ Sprint 2 (IN PROGRESS) ── Dev Team UI + critical workflow gaps
                               Recruitment route (recruitmentManage guard),
                               Documents/Knowledge Base hidden from Dev Team,
                               candidate search restricted to HR/Admin/Manager
-                    🔲 WF-16: Hiring Request Form (Dev Team → HR)
-                    🔲 WF-19: Request Status Tracking (Dev Team dashboard)
-                    🔲 G6:  Interview notification to Interviewer
-                    🔲 G13: Feedback-submitted notification to HR
-                    🔲 WF-9: Structured skills on job postings
-                    🔲 WF-4 + WF-5: Job-candidate matching UX
+                    ✅ WF-16: Hiring Request Form (Dev Team → HR) — form, API, HR queue
+                    ✅ WF-19: Request Status Tracking — "My Requests" with status filter chips,
+                              live counts per status, 4-step progress bar on detail
+                    ✅ G6:  Interview notification to Interviewer (in-app, V22)
+                    ✅ G13: Feedback-submitted + new-request notification to HR (in-app)
+                    ✅ WF-4: "Find Candidates" from Job Board → Candidate Search with context
+                    ✅ WF-5: Already-applied indicator on search results (forJobPostingId param)
 
 Sprint 3         ── Onboarding prep + analytics enhancements
                     - G8: Onboarding preparation checklist
-                    - WF-7: Per-posting analytics filter
-                    - WF-6 + WF-12 + WF-13: Chart drill-down
+                    ✅ WF-7: Per-posting analytics filter
+                    ✅ WF-6 + WF-12: Chart drill-down (funnel + skills)
+                    ✅ WF-9: Structured required skills on job postings
+                    ✅ WF-10: Job fit score badge on Kanban cards
+                    🔲 WF-13: Time-to-hire chart drill-down (blocked)
 ```
 
 ---
@@ -864,29 +867,29 @@ Sprint 3         ── Onboarding prep + analytics enhancements
 | WF-17 | As an HR user, I want to share a shortlisted candidate's CV with a Dev Team member from the hiring request detail page. | `CvShareService`, `CvShareController`, share panel on `request-detail.page.html`, `CvShareInboxPage` (`/cv-shares/inbox`), `cv_shares` table (V18) | M | ✅ Done |
 | WF-18 | As a Dev Team member, I want to open shared CVs and mark my preliminary impression (Interested / Not Interested / Review Later) so HR knows whether to proceed. | `CvShareDetailPage`, `PATCH /cv-shares/{shareId}/impression`, impression badges on request detail | M | ✅ Done |
 | HS-1 | As an HR officer, I want to see each candidate's current hiring status at a glance (Available / In Process / Offered / Hired / Rejected / Withdrawn), so that I can quickly assess the talent pool and avoid engaging candidates who are already hired or withdrawn. | V20 migration (`cv_candidates.hiring_status`), `CandidateHiringStatusService.recalculate()` hooked into `JobApplicationService.apply()` + `moveStage()`, status badge on candidate list/detail/cv-share-inbox, `PATCH /cv-candidates/{id}/hiring-status` for manual Withdraw/Return | M | ✅ Done |
-| WF-4 | As an HR officer, I want to click "Find Candidates" on a job posting's Kanban board, so that the system takes me to Candidate Search with the posting's skills and location pre-filled. | `job-board.page.html` (button), `job-board.page.ts` (navigate with query params), `candidate-search.page.ts` (read query params), WF-9 (prerequisite) | M | 🔲 Next |
-| WF-16 | As a Dev Team member, I want to submit a hiring request (role type, description, urgency) via the platform, so that HR receives it formally and can track it. | `HiringRequestController.java`, `HiringRequestService.java`, `hiring_requests` table (Flyway), `my-requests.page.ts`, `request-form.page.ts` | L | 🔲 Sprint 2 |
+| WF-4 | As an HR officer, I want to click "Find Candidates" on a job posting's Kanban board, so that the system takes me to Candidate Search with the posting's skills and location pre-filled. | `job-board.page.ts` (`findCandidates()` → router navigate with `forJobPostingId`), `job-list.page.ts` (same), `candidate-search.page.ts` (reads query param + info banner) | M | ✅ Done |
+| WF-16 | As a Dev Team member, I want to submit a hiring request (role type, description, urgency) via the platform, so that HR receives it formally and can track it. | `HiringRequestController.java`, `HiringRequestService.java` (notifies HR on create), `hiring_requests` table (V18), `my-requests.page.ts`, `request-form.page.ts` | L | ✅ Done |
 | WF-17 | As an HR user, I want to share a shortlisted candidate's CV with the Dev Team member, so that they can review the profile before the interview is scheduled. | `CvShareController.java`, `CvShareService.java`, `cv_shares` table (V18), HR share panel on `request-detail.page.html`, `cv-share-inbox.page.ts` | M | ✅ Done |
 | WF-18 | As a Dev Team member, I want to see a list of CVs that HR has shared with me and mark each as Interested / Not Interested / Review Later, so that HR knows my preliminary impression. | `CvShareInboxPage`, `CvShareDetailPage`, `PATCH /cv-shares/{shareId}/impression`, impression badges on request detail | M | ✅ Done |
-| WF-19 | As a Dev Team member, I want to see the status of my submitted hiring requests (Pending / In Progress / Candidate Found / Hired / Closed), so that I have visibility without asking HR directly. | `my-requests.page.ts` (status column + filters), `HiringRequestController.java` (GET by requester) | S | 🔲 Sprint 2 |
+| WF-19 | As a Dev Team member, I want to see the status of my submitted hiring requests (Pending / In Progress / Candidate Found / Hired / Closed), so that I have visibility without asking HR directly. | `RequestListPage` — `selectedStatus` signal + `filteredRequests` computed; status filter chips with live counts per status; `GET /api/v1/hiring-requests/my`; 4-step progress bar on detail page | S | ✅ Done |
 
 ### Should Have
 
 | Story ID | User Story | Affected Components | Effort | Status |
 |----------|-----------|---------------------|--------|--------|
-| WF-5 | As an HR officer, I want search results to indicate which candidates have already applied to the current job posting, so that I do not create duplicates. | `CvSearchResultResponse.java` (appliedJobPostingIds), `CvSearchService.java` (left join to job_applications), `candidate-search.page.html` (badge) | M | 🔲 |
-| WF-6 | As an HR manager, I want to click a bar in the recruitment funnel chart to see the candidates in that stage, so that I can act on bottlenecks. | `hr-analytics.page.ts` (Highcharts point.click), new filtered candidate list endpoint or route | M | 🔲 |
-| WF-7 | As an HR manager, I want to filter HR Analytics by a specific job posting, so that I can assess individual role pipeline health. | `hr-analytics.page.ts` (dropdown), `HrAnalyticsService.java` (WHERE job_posting_id), all 5 analytics endpoints | L | 🔲 |
+| WF-5 | As an HR officer, I want search results to indicate which candidates have already applied to the current job posting, so that I do not create duplicates. | `CvSearchResultResponse.java` (`alreadyApplied` bool), `CvSearchService.java` (EXISTS subquery when `forJobPostingId` set), `candidate-search.page.html` ("Applied" badge) | M | ✅ Done |
+| WF-6 | As an HR manager, I want to click a bar in the recruitment funnel chart to see the candidates in that stage, so that I can act on bottlenecks. | `hr-analytics.page.ts` (Highcharts point.click), `job-list.page.ts/html` (highlightStage banner) | M | ✅ Done |
+| WF-7 | As an HR manager, I want to filter HR Analytics by a specific job posting, so that I can assess individual role pipeline health. | `HrAnalyticsService.java` (conditional WHERE), all 5 controller endpoints (`?jobPostingId`), `hr-analytics.api.ts` (HttpParams), `hr-analytics.store.ts` (`selectJobPosting`), `hr-analytics.page.ts/html` (`app-dropdown`) | L | ✅ Done |
 | WF-8 | As an HR manager, I want a compact pipeline summary on the Kanban board header (total, in-pipeline, hired, hire rate). | `job-board.page.ts` (computed signals), `job-board.page.html` (stats row) | S | ✅ Done |
 
 ### Could Have
 
 | Story ID | User Story | Affected Components | Effort | Status |
 |----------|-----------|---------------------|--------|--------|
-| WF-9 | As an HR officer, I want to add structured required skills to a job posting (tag input), so that the system can match candidates automatically. | `JobPosting.java` + `job_posting_skills` table (Flyway migration), `job-form.page.ts/html`, DTOs | L | 🔲 |
-| WF-10 | As an HR officer, I want the system to show a job fit score when viewing candidates for a posting. | `JobMatchService.java`, `GET /api/v1/recruitment/job-postings/{id}/candidate-matches`, Angular modal/page; depends on WF-9 | L | 🔲 |
+| WF-9 | As an HR officer, I want to add structured required skills to a job posting (tag input), so that the system can match candidates automatically. | `V23__job_posting_skills.sql`, `JobPostingSkill` entity/repo, `JobPostingSkillDto`, `GET/PUT /{id}/skills`, `recruitment.model.ts`, `recruitment.api.ts`, `job-form.page.ts/html` | L | ✅ Done |
+| WF-10 | As an HR officer, I want the system to show a job fit score when viewing candidates for a posting. | `ApplicationResponse.java` (`fitScore: Integer`), `JobApplicationService.computeFitScore()` (required skills vs. candidate skills), `job-board.page.ts` (`fitScoreBadgeClass()`), `job-board.page.html` (color-coded `% fit` badge on Kanban cards); depends on WF-9 | L | ✅ Done |
 | WF-11 | As an HR officer, I want to batch-apply multiple candidates from search results to a posting at once. | `candidate-search.page.ts` (row checkboxes), `POST /api/v1/recruitment/job-postings/{id}/applications/batch` | M | 🔲 |
-| WF-12 | As an HR manager, I want to click a skill on the Top Skills chart to open Candidate Search pre-filled with that skill. | `hr-analytics.page.ts` (click handler, router navigate) | S | 🔲 |
+| WF-12 | As an HR manager, I want to click a skill on the Top Skills chart to open Candidate Search pre-filled with that skill. | `hr-analytics.page.ts` (click handler, router navigate), `candidate-search.page.ts` (skills query param + auto-search) | S | ✅ Done |
 | WF-13 | As an HR manager, I want to click a job posting on the Time-to-Hire chart to open its Kanban board. | `hr-analytics.page.ts` (click handler), `TimeToHireEntry` (add jobPostingId) | S | 🔲 |
 
 ### Won't Have (This Cycle)
@@ -901,7 +904,7 @@ Sprint 3         ── Onboarding prep + analytics enhancements
 
 ## 7. Recommended Next Stories
 
-> **Updated 2026-05-25** — Sprint 2 partially delivered. WF-17 (CV Sharing), WF-18 (CV Review), and HS-1 (Candidate Hiring Status) are shipped. Remaining Sprint 2 items focus on notification infrastructure and hiring request submission.
+> **Updated 2026-05-26** — Sprint 2 fully delivered. All critical workflow gaps (G6, G13, G14/WF-16, WF-19, WF-4, WF-5) are shipped. Sprint 3 focuses on onboarding prep and analytics enhancements.
 
 ### Priority 1 — CRITICAL Workflow Gaps (Sprint 2 remaining)
 
@@ -910,32 +913,32 @@ Sprint 3         ── Onboarding prep + analytics enhancements
 | 1 | **WF-17 — CV Sharing (HR → Dev Team)** | ~~G15~~ | Shipped — HR share panel on request detail; Dev Team Shared CVs inbox | M | ✅ Done |
 | 2 | **WF-18 — CV Review and Preliminary Impression** | ~~G16~~ | Shipped — impression form on CV Share Detail page; badges visible to HR | M | ✅ Done |
 | 3 | **HS-1 — Candidate Hiring Status (V20)** | — | Shipped — auto-recalculation on every stage change; badges on list/detail/inbox; Withdraw/Return actions for HR | M | ✅ Done |
-| 4 | **WF-16 — Hiring Request Form** — Dev Team submits hiring request (role type, description, urgency, department) via the platform → HR queue → convert to job posting | G14 | Step 1 of the workflow has ZERO system support. The entire process starts with this request, yet it happens outside the platform. | L | 🔲 |
-| 5 | **WF-19 — Request Status Tracking** — Dev Team sees status of submitted requests (Pending / In Progress / Candidate Found / Hired / Closed) | G14 | Dev Team members have zero visibility into what happens after they submit a request. | S | 🔲 |
-| 6 | **G6** — Interview notification to Interviewer (in-app + email with candidate details, meeting link, profile link) | G6 | Step 7 → Step 8 handoff is broken. The Interviewer has no way to know they have been assigned an interview. | M | 🔲 |
-| 7 | **G13** — Feedback-submitted notification to HR (in-app + email) | G13 | Step 8 → Step 9 handoff is broken. HR cannot make a hiring decision if they do not know feedback has been submitted. | M | 🔲 |
+| 4 | **WF-16 — Hiring Request Form** — Dev Team submits hiring request (role type, description, urgency, department) via the platform → HR queue → convert to job posting | G14 | Step 1 now fully in the system. HR is notified on submission. | L | ✅ Done |
+| 5 | **WF-19 — Request Status Tracking** — Dev Team "My Requests" dashboard with status filter chips (All / per-status with live counts), client-side `filteredRequests` computed signal, 4-step progress bar on detail page | G14 | Full visibility into request lifecycle without asking HR. | S | ✅ Done |
+| 6 | **G6** — Interview notification to Interviewer (in-app) | G6 | Step 7 → Step 8 handoff fixed. Interviewer notified on assignment via bell. | M | ✅ Done |
+| 7 | **G13** — Feedback-submitted notification to HR (in-app) + new hiring request notification to HR | G13 | Step 8 → Step 9 handoff fixed. HR notified on feedback submission and on new request. | M | ✅ Done |
 
 ### Priority 2 — High Value (Sprint 2-3)
 
 | # | Story | Gaps Closed | Business Justification | Effort |
 |---|-------|-------------|----------------------|--------|
-| 7 | **WF-9** — Structured required skills on job postings (tag input → `job_posting_skills` table) | G3 | Foundation for all job-candidate matching. Without structured skills, no automated matching, no fit scoring, no skill-demand analytics. Every downstream feature depends on this. | L |
-| 8 | **WF-4** — "Find Candidates" button on job posting/Kanban → Candidate Search pre-filled | G1 | Eliminates the highest-friction daily workflow: re-typing job requirements into search. Depends on WF-9. | M |
-| 9 | **WF-5** — Already-applied indicator on search results when in posting context | G2 | Prevents duplicate applications and wasted recruiter time on candidates already in the pipeline. | M |
+| 7 | **~~WF-9~~** ✅ — Structured required skills on job postings (tag input → `job_posting_skills` table) | ~~G3~~ | Delivered 2026-05-26. V23 migration, full backend skill CRUD, skill tag input on job form. Unblocks WF-10. | L |
+| 8 | **WF-4** — "Find Candidates" button on job posting/Kanban → Candidate Search pre-filled | G1 | Delivered Sprint 2 — Job Board and Job List both navigate to Candidate Search with `forJobPostingId` context. | M | ✅ Done |
+| 9 | **WF-5** — Already-applied indicator on search results when in posting context | G2 | Delivered Sprint 2 — `forJobPostingId` query param + EXISTS subquery; "Applied" badge in search results. | M | ✅ Done |
 
 ### Priority 3 — Should Have (Sprint 3-4)
 
 | # | Story | Gaps Closed | Business Justification | Effort |
 |---|-------|-------------|----------------------|--------|
 | 10 | **G8** — Basic onboarding preparation checklist on "Hired" stage | G8 | Step 10 of the workflow (onboarding prep) has no system support. A simple checklist attached to the Hired stage would bridge this gap without requiring a full employee module. | M |
-| 11 | **WF-7** — Per-posting analytics filter on HR Analytics page | G5, G11 | HR managers need individual role health, not just aggregate metrics. Critical for spotting bottlenecks in specific roles. | L |
-| 12 | **WF-6 + WF-12 + WF-13** — Interactive chart drill-down | G10 | Analytics are currently "look but don't act." Drill-down turns dashboards into operational tools. | M |
+| 11 | **~~WF-7~~** ✅ — Per-posting analytics filter on HR Analytics page | ~~G5~~, ~~G11~~ | Delivered 2026-05-26. `app-dropdown` filter scopes all 5 charts to one posting; backend adds conditional WHERE to all 5 SQL queries. | L |
+| 12 | **~~WF-6~~** ✅ + **~~WF-12~~** ✅ + **WF-13** 🔲 — Interactive chart drill-down | G10 | WF-6 and WF-12 delivered 2026-05-26. WF-13 blocked on `jobPostingId` missing from `TimeToHireEntry`. | M |
 
 ### Priority 4 — Could Have (Future Sprints)
 
 | # | Story | Gaps Closed | Business Justification | Effort |
 |---|-------|-------------|----------------------|--------|
-| 13 | **WF-10** — Job fit scoring (candidate skills vs. posting required skills) | G1 | Helps recruiters prioritize which candidates to review. Depends on WF-9. | L |
+| 13 | **~~WF-10~~** ✅ — Job fit scoring (candidate skills vs. posting required skills) | G1 | Delivered 2026-05-26. `fitScore` on `ApplicationResponse`; color-coded fit badge on Kanban cards. Depends on WF-9. | L |
 | 14 | **WF-11** — Batch-apply candidates from search results | G4 | Efficiency gain for high-volume roles. | M |
 | 15 | **G12** — Report export (PDF / Excel) from HR Analytics | G12 | Enables offline sharing of metrics in leadership meetings. | M |
 | 16 | **G7** — Offer term tracking (salary, start date, status) | G7 | Brings the offer process into the system instead of spreadsheets. | M |
@@ -969,8 +972,8 @@ Dashboard                                                    [all authenticated]
   Pipeline Analytics      Recruitment metrics and charts             [analyticsView: HR, Manager, Admin]
 
 ─── DEV TEAM ──────────────────────────────────────────────────
-  My Requests             Submit new hiring request, view status     [hiringRequestsSubmit + hiringRequestsViewOwn: Dev Team, Admin]
-                          of all submitted requests — 🔲 not yet built (WF-16, WF-19)
+  My Requests             Submit new hiring request, view status     [hiringRequestsSubmit + hiringRequestsViewOwn: Dev Team, Admin] ✅ LIVE
+                          of all submitted requests (WF-16, WF-19)
   Shared CVs              View candidates HR has shared; open        [cvSharesReceive: Dev Team, Admin] ✅ LIVE
                           full CV profile; mark impression
                           (Interested / Not Interested / Review
@@ -1006,34 +1009,34 @@ The "Dev Team" group presents the Dev Team's own UI experience:
 | Candidate Detail | Back to Candidates, Application History section, hiring_status badge, Withdraw/Return button (HR only) | Apply to Job button in header (WF-1 variant) |
 | Job List | New Job Posting, View Board / Edit / Close per row | "Find Candidates" per row (WF-4) |
 | Job Board (Kanban) | Back to Jobs, Apply Candidate, candidate name link, pipeline stats header, Move Stage dropdown (Angular signal-controlled) | "Find Candidates" button (WF-4), per-stage analytics (WF-7) |
-| HR Analytics | Read-only charts | Job posting filter dropdown (WF-7), clickable chart elements (WF-6, WF-12, WF-13) |
-| My Requests (Dev Team) | **New page** — not yet built | Submit New Request (form), View Status per row, Filter by status (WF-16, WF-19) |
+| HR Analytics | Funnel click → recruitment + stage banner (WF-6 ✅), skill click → candidate search auto-filled (WF-12 ✅), `app-dropdown` job posting filter scopes all 5 charts (WF-7 ✅) | Time-to-hire click → Kanban (WF-13, blocked on backend — needs `jobPostingId` in `TimeToHireEntry`) |
+| My Requests (Dev Team) | Submit New Request button; status filter chips (All + 6 statuses with live counts); status badge per row; view detail with 4-step progress bar | ✅ Live (WF-16, WF-19) |
 | Shared CVs (Dev Team) | Card grid inbox, impression badge, hiring_status badge on card, click → full CV profile + impression form | ✅ Live (WF-17, WF-18) |
 
 ---
 
 ## 9. Story ↔ Gap Cross-Reference
 
-> Updated 2026-05-25 — Sprint 2 partially delivered; CV sharing + hiring status shipped.
+> Updated 2026-05-26 — Sprint 2 fully delivered.
 
 | Story | Gap Addressed | Sprint | Status | Priority |
 |-------|--------------|--------|--------|----------|
-| **WF-16 — Hiring Request Form** | G14 | Sprint 2 | 🔲 | P1 CRITICAL |
+| **WF-16 — Hiring Request Form** | G14 | Sprint 2 | ✅ Done | ~~P1 CRITICAL~~ |
 | **WF-17 — CV Sharing (HR → Dev Team)** | G15 | Sprint 2 | ✅ Done | ~~P1 CRITICAL~~ |
 | **WF-18 — CV Review and Preliminary Impression** | G16 | Sprint 2 | ✅ Done | ~~P1 CRITICAL~~ |
 | **HS-1 — Candidate Hiring Status** | Cross-cutting | Sprint 2 | ✅ Done | — |
-| **WF-19 — Request Status Tracking** | G14 | Sprint 2 | 🔲 | P1 CRITICAL |
-| **G6 — Interview notification to Interviewer** | G6 | Sprint 2 | 🔲 | P1 CRITICAL |
-| **G13 — Feedback-submitted notification to HR** | G13 | Sprint 2 | 🔲 | P1 CRITICAL |
-| WF-9 — Structured skills on postings | G3 | Sprint 2 | 🔲 | P2 |
-| WF-4 — Find Candidates from posting | G1 | Sprint 2-3 | 🔲 | P2 |
-| WF-5 — Already-applied indicator | G2 | Sprint 2-3 | 🔲 | P2 |
+| **WF-19 — Request Status Tracking** | G14 | Sprint 2 | ✅ Done | ~~P1 CRITICAL~~ |
+| **~~G6~~ — Interview notification to Interviewer** | ~~G6~~ | Sprint 2 | ✅ Done | ~~P1 CRITICAL~~ |
+| **~~G13~~ — Feedback + hiring request notification to HR** | ~~G13~~ | Sprint 2 | ✅ Done | ~~P1 CRITICAL~~ |
+| WF-4 — Find Candidates from posting | G1 | Sprint 2 | ✅ Done | ~~P2~~ |
+| WF-5 — Already-applied indicator | G2 | Sprint 2 | ✅ Done | ~~P2~~ |
+| WF-9 — Structured skills on postings | G3 | Sprint 3 | ✅ Done | P2 |
 | G8 — Onboarding preparation checklist | G8 | Sprint 3 | 🔲 | P3 |
-| WF-7 — Per-posting analytics filter | G11 | Sprint 3 | 🔲 | P3 |
-| WF-6 — Clickable funnel chart | G10 | Sprint 3 | 🔲 | P3 |
-| WF-12 — Clickable top skills chart | G10 | Sprint 3 | 🔲 | P3 |
-| WF-13 — Clickable time-to-hire chart | G10 | Sprint 3 | 🔲 | P3 |
-| WF-10 — Job fit scoring | G1 | Future | 🔲 | P4 |
+| WF-7 — Per-posting analytics filter | G11 | Sprint 3 | ✅ Done | P3 |
+| WF-6 — Clickable funnel chart | G10 | Sprint 3 | ✅ Done | P3 |
+| WF-12 — Clickable top skills chart | G10 | Sprint 3 | ✅ Done | P3 |
+| WF-13 — Clickable time-to-hire chart | G10 | Sprint 3 | 🔲 (blocked) | P3 |
+| WF-10 — Job fit scoring | G1 | Sprint 3 | ✅ Done | ~~P4~~ |
 | WF-11 — Batch-apply candidates | G4 | Future | 🔲 | P4 |
 | G7 — Offer term tracking | G7 | Future | 🔲 | P4 |
 | G9 — Auto-close posting | G9 | Future | 🔲 | P4 |
@@ -1054,7 +1057,9 @@ The "Dev Team" group presents the Dev Team's own UI experience:
 - **Coverage gate:** JaCoCo 95% branch coverage enforced in `pom.xml` — all new services must meet this threshold.
 - **Schema validation:** Hibernate validates on startup — DB `SMALLINT` must map to Java `short`, not `int`.
 - **Analytics:** `HrAnalyticsService` uses `EntityManager` native queries (same pattern as `ReportService`).
-- **Docker rebuild:** `docker compose build app && docker compose up -d --force-recreate app` — restart alone does not pick up code changes.
+- **Docker rebuild:** Build the JAR first (`docker run --rm -v $(pwd):/app -v ~/.m2:/root/.m2 -w /app maven:3.9-eclipse-temurin-21 mvn package -DskipTests -q`), then `docker compose build app && docker compose up -d app` — restart alone does not pick up code changes; the Dockerfile copies `target/*.jar` from the host.
+- **HiringRequestStore pattern:** `create()` only clears the saving flag on success — it does NOT reload the list. The form page navigates away after creation; the list reloads naturally on next visit. Never call `loadAll()` inside `create()` — Dev Team users lack the "view all requests" permission and would receive a 403.
+- **Notification infrastructure:** `NotificationService.send()` is the single entry point for all in-app notifications. Fan-out to role members uses `RoleRepository.findByName()` + `UserRepository.findActiveByRoleId()`. The `notifications` table is created by `V22__notifications.sql`. Use `CREATE TABLE IF NOT EXISTS` in migrations if Hibernate DDL auto is enabled — prevents startup failure if Hibernate created the table first.
 - **Maven path:** `JAVA_HOME=/opt/tools/jdk-21.0.11/Contents/Home`, `MAVEN_HOME=/opt/tools/apache-maven-3.9.16`; always run from `demo-app-backend/`.
 - **Angular conventions:** Signals-based stores, standalone components, `SHARED_IMPORTS`, `app-data-table`, `app-page-layout`, `app-hc-chart` — no NgModules, no Angular Material.
 - **Sidebar hidden items:** `hiddenFor: keyof RolePermissions` on `NavItem` hides an item when the user HAS that permission. Used to hide Documents and Knowledge Base from Dev Team (`hiddenFor: 'cvSharesReceive'`). Distinct from `permission` which shows an item only when the user has that permission.

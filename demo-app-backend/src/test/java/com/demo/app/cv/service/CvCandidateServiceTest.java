@@ -279,6 +279,34 @@ class CvCandidateServiceTest {
                 .build();
     }
 
+    @Test
+    void searchSimple_returnsMappedResults() {
+        var candidate = CvCandidate.builder()
+                .id(CANDIDATE_ID).documentId(DOC_ID).documentCategoryId(CAT_ID)
+                .fullName("John Doe").email("john@example.com")
+                .confidenceOverall("HIGH").extractedAt(Instant.now()).createdAt(Instant.now())
+                .build();
+        when(candidateRepository.searchSimple(eq("John"), any())).thenReturn(List.of(candidate));
+
+        var results = cvCandidateService.searchSimple("John", 10);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).id()).isEqualTo(CANDIDATE_ID);
+        assertThat(results.get(0).fullName()).isEqualTo("John Doe");
+        assertThat(results.get(0).email()).isEqualTo("john@example.com");
+    }
+
+    @Test
+    void searchSimple_capsResultsAt50() {
+        when(candidateRepository.searchSimple(eq("x"), any())).thenReturn(List.of());
+
+        cvCandidateService.searchSimple("x", 200);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        verify(candidateRepository).searchSimple(eq("x"), captor.capture());
+        assertThat(captor.getValue().getPageSize()).isEqualTo(50);
+    }
+
     private CreateCvCandidateRequest buildRequest() {
         return new CreateCvCandidateRequest(
                 DOC_ID, CAT_ID, "John Doe", "john@example.com", "+1234567890",
