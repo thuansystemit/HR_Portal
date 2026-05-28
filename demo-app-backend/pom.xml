@@ -21,6 +21,9 @@
         <lombok.version>1.18.34</lombok.version>
         <mapstruct.version>1.6.3</mapstruct.version>
         <jjwt.version>0.12.6</jjwt.version>
+        <bc-fips.version>2.0.0</bc-fips.version>
+        <bctls-fips.version>2.0.19</bctls-fips.version>
+        <bcpkix-fips.version>2.0.7</bcpkix-fips.version>
     </properties>
 
     <dependencies>
@@ -140,6 +143,28 @@
             <artifactId>logstash-logback-encoder</artifactId>
             <version>7.4</version>
         </dependency>
+        <!-- Bouncy Castle FIPS — FIPS 140-2 validated crypto (SC-13) -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bc-fips</artifactId>
+            <version>${bc-fips.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bctls-fips</artifactId>
+            <version>${bctls-fips.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcpkix-fips</artifactId>
+            <version>${bcpkix-fips.version}</version>
+        </dependency>
+        <!-- TOTP for MFA (IA-2) -->
+        <dependency>
+            <groupId>dev.samstevens.totp</groupId>
+            <artifactId>totp-spring-boot-starter</artifactId>
+            <version>1.7.1</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -154,6 +179,16 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                    <requiresUnpack>
+                        <dependency>
+                            <groupId>org.bouncycastle</groupId>
+                            <artifactId>bc-fips</artifactId>
+                        </dependency>
+                        <dependency>
+                            <groupId>org.bouncycastle</groupId>
+                            <artifactId>bctls-fips</artifactId>
+                        </dependency>
+                    </requiresUnpack>
                 </configuration>
             </plugin>
             <plugin>
@@ -175,6 +210,18 @@
                             <version>${mapstruct.version}</version>
                         </path>
                     </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <!-- OWASP Dependency-Check — SCA (RA-5, SI-2) -->
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>9.1.0</version>
+                <configuration>
+                    <failBuildOnCVSS>7</failBuildOnCVSS>
+                    <suppressionFile>owasp-suppressions.xml</suppressionFile>
+                    <formats>HTML,JSON</formats>
+                    <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
                 </configuration>
             </plugin>
             <plugin>

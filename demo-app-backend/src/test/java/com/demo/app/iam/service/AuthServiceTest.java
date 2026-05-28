@@ -12,6 +12,7 @@ import com.demo.app.platform.exception.ResourceNotFoundException;
 import com.demo.app.platform.exception.WrongPasswordException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -21,7 +22,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -42,6 +42,9 @@ class AuthServiceTest {
     @Mock PasswordEncoder passwordEncoder;
     @Mock JwtService jwtService;
     @Mock PermissionCacheService permissionCacheService;
+    @Mock TokenDenylistService tokenDenylistService;
+    @Mock SessionActivityService sessionActivityService;
+    @Mock MfaService mfaService;
     @Mock HttpServletResponse httpResponse;
     @Mock HttpServletRequest httpRequest;
 
@@ -50,28 +53,57 @@ class AuthServiceTest {
 
     private final UUID USER_ID = UUID.randomUUID();
 
+    @BeforeEach
+    void setup() {
+        // @Value fields are not injected by Mockito — set them manually
+        ReflectionTestUtils.setField(authService, "maxConcurrentSessions", 5);
+        ReflectionTestUtils.setField(authService, "accessExpiry", 900);
+        ReflectionTestUtils.setField(authService, "refreshExpiry", 604800);
+        ReflectionTestUtils.setField(authService, "cookieSecure", false);
+    }
+
     @Test
-    void login_success_returnsAuthResponse() {
+    void login_unenrolledUser_returnsMfaEnrollmentRequired() {
+        // With MFA hard-block, unenrolled users get an enrollment token instead of session tokens
         var user = User.builder().id(USER_ID).email("a@b.com").status("active").fullName("Test").build();
-        var cred = Credential.builder().userId(USER_ID).passwordHash("$hash").failedAttempts(0).build();
-        var permSet = new PermissionCacheService.PermissionSet(UUID.randomUUID(), Set.of("usersView"));
+        var cred = Credential.builder().userId(USER_ID).passwordHash("$hash")
+                .failedAttempts(0).mfaEnabled(false).build();
 
         when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("a@b.com"))
                 .thenReturn(Optional.of(user));
         when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cred));
         when(passwordEncoder.matches("pass123", "$hash")).thenReturn(true);
         when(credentialRepository.save(any())).thenReturn(cred);
-        when(permissionCacheService.loadPermissions(USER_ID)).thenReturn(permSet);
-        when(jwtService.generateAccessToken(any(), any(), any())).thenReturn("jwt.token.here");
-        when(refreshTokenRepository.save(any())).thenAnswer(i -> i.getArgument(0));
-        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
-        when(roleRepository.findById(any())).thenReturn(Optional.empty());
+        when(mfaService.createEnrollmentToken(USER_ID)).thenReturn("enroll-token");
 
         var result = authService.login(new LoginRequest("a@b.com", "pass123"),
                 httpResponse, "127.0.0.1", "Mozilla");
 
-        assertThat(result.user().email()).isEqualTo("a@b.com");
-        assertThat(result.user().permissions()).contains("usersView");
+        assertThat(result.mfaEnrollmentRequired()).isTrue();
+        assertThat(result.enrollmentToken()).isEqualTo("enroll-token");
+        assertThat(result.user()).isNull();
+        verify(mfaService).createEnrollmentToken(USER_ID);
+    }
+
+    @Test
+    void login_enrolledUser_returnsMfaChallenge() {
+        var user = User.builder().id(USER_ID).email("a@b.com").status("active").fullName("Test").build();
+        var cred = Credential.builder().userId(USER_ID).passwordHash("$hash")
+                .failedAttempts(0).mfaEnabled(true).build();
+
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("a@b.com"))
+                .thenReturn(Optional.of(user));
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cred));
+        when(passwordEncoder.matches("pass123", "$hash")).thenReturn(true);
+        when(credentialRepository.save(any())).thenReturn(cred);
+        when(mfaService.createChallenge(USER_ID, "127.0.0.1")).thenReturn("challenge-token");
+
+        var result = authService.login(new LoginRequest("a@b.com", "pass123"),
+                httpResponse, "127.0.0.1", "Mozilla");
+
+        assertThat(result.mfaRequired()).isTrue();
+        assertThat(result.challengeToken()).isEqualTo("challenge-token");
+        assertThat(result.user()).isNull();
     }
 
     @Test
@@ -132,6 +164,37 @@ class AuthServiceTest {
     }
 
     @Test
+    void issueTokensForUser_succeeds_underSessionLimit() {
+        var user = User.builder().id(USER_ID).email("a@b.com").fullName("Test").status("active").build();
+        var permSet = new PermissionCacheService.PermissionSet(UUID.randomUUID(), Set.of("usersView"));
+
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
+        when(permissionCacheService.loadPermissions(USER_ID)).thenReturn(permSet);
+        when(jwtService.generateAccessToken(any(), any(), any(), any())).thenReturn("jwt.token.here");
+        when(refreshTokenRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(sessionActivityService.countActiveSessions(USER_ID)).thenReturn(0);
+        when(httpRequest.getRemoteAddr()).thenReturn("127.0.0.1");
+        when(httpRequest.getHeader("User-Agent")).thenReturn("Mozilla");
+        when(roleRepository.findById(any())).thenReturn(Optional.empty());
+
+        var result = authService.issueTokensForUser(USER_ID, httpRequest, httpResponse);
+
+        assertThat(result.user().email()).isEqualTo("a@b.com");
+        verify(sessionActivityService).register(any(), eq(USER_ID));
+    }
+
+    @Test
+    void issueTokensForUser_throws_whenSessionLimitReached() {
+        var user = User.builder().id(USER_ID).email("a@b.com").status("active").build();
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
+        when(sessionActivityService.countActiveSessions(USER_ID)).thenReturn(5);
+
+        assertThatThrownBy(() -> authService.issueTokensForUser(USER_ID, httpRequest, httpResponse))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("concurrent sessions");
+    }
+
+    @Test
     void sha256_returnsDeterministicHex() {
         var h1 = authService.sha256("test");
         var h2 = authService.sha256("test");
@@ -156,8 +219,6 @@ class AuthServiceTest {
         assertThat(stored.getRevokedAt()).isNotNull();
     }
 
-    // Task 3.1 -- additional coverage for refresh, getMe, changePassword, handleFailedLogin
-
     @Test
     void refresh_succeeds_withValidToken() {
         var raw = UUID.randomUUID().toString();
@@ -178,14 +239,15 @@ class AuthServiceTest {
         when(refreshTokenRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
         when(permissionCacheService.loadPermissions(USER_ID)).thenReturn(permSet);
-        when(jwtService.generateAccessToken(any(), any(), any())).thenReturn("new.access.token");
+        when(jwtService.generateAccessToken(any(), any(), any(), any())).thenReturn("new.access.token");
         when(roleRepository.findById(any())).thenReturn(Optional.empty());
 
         var result = authService.refresh(httpRequest, httpResponse);
 
         assertThat(result).isNotNull();
         assertThat(stored.getRevokedAt()).isNotNull();
-        verify(jwtService).generateAccessToken(any(), any(), any());
+        verify(jwtService).generateAccessToken(any(), any(), any(), any());
+        verify(sessionActivityService).register(any(), eq(USER_ID));
     }
 
     @Test
@@ -295,7 +357,6 @@ class AuthServiceTest {
     void logout_noOp_whenNoCookies() {
         when(httpRequest.getCookies()).thenReturn(null);
 
-        // Should complete without exception
         authService.logout(httpRequest, httpResponse);
 
         verify(refreshTokenRepository, never()).findByTokenHashAndRevokedAtIsNull(any());
@@ -304,7 +365,6 @@ class AuthServiceTest {
     @Test
     void getMe_returnsNullRoleName_whenNoRole() {
         var user = User.builder().id(USER_ID).email("a@b.com").fullName("Test").status("active").build();
-        // PermissionSet with null roleId means no role is attached
         var permSet = new PermissionCacheService.PermissionSet(null, Set.of());
 
         when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
@@ -333,7 +393,6 @@ class AuthServiceTest {
                 new LoginRequest("a@b.com", "wrong"), httpResponse, "ip", "ua"))
                 .isInstanceOf(ForbiddenException.class);
 
-        // After 5th failure, lockedUntil should be set
         verify(credentialRepository).save(argThat(c ->
                 c.getFailedAttempts() == 5 && c.getLockedUntil() != null));
     }

@@ -67,6 +67,15 @@ export class RecruitmentApi {
     return this.http.post<Application>(`${this.base}/job-postings/${jobId}/applications`, body);
   }
 
+  batchApply(
+    jobId: string,
+    req: { cvCandidateIds: string[]; notes?: string },
+  ): Observable<{ applied: any[]; skipped: string[] }> {
+    return this.http.post<{ applied: any[]; skipped: string[] }>(
+      `${this.base}/job-postings/${jobId}/applications/batch`, req,
+    );
+  }
+
   moveStage(
     jobId: string,
     appId: string,

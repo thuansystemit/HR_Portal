@@ -1,0 +1,115 @@
+<div class="d-flex align-items-center justify-content-center min-vh-100 bg-light">
+  <div class="card shadow-sm" style="width: 100%; max-width: 480px;">
+    <div class="card-body p-4">
+
+      <div class="text-center mb-4">
+        <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-warning bg-opacity-10 mb-3"
+             style="width:56px;height:56px">
+          <i class="bi bi-shield-check text-warning fs-4"></i>
+        </div>
+        <h1 class="h4 fw-bold mb-1">Set Up Two-Factor Authentication</h1>
+        <p class="text-muted small mb-0">
+          Your organisation requires MFA for all accounts.
+        </p>
+      </div>
+
+      @switch (step()) {
+
+        @case ('loading') {
+          <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading…</span>
+            </div>
+          </div>
+        }
+
+        @case ('error') {
+          <div class="alert alert-danger" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>{{ error() }}
+          </div>
+          <div class="text-center mt-3">
+            <a routerLink="/login" class="btn btn-outline-secondary btn-sm">Back to login</a>
+          </div>
+        }
+
+        @case ('scan') {
+          <ol class="ps-3 small text-muted mb-3">
+            <li class="mb-1">Install an authenticator app (Google Authenticator, Authy, or similar).</li>
+            <li class="mb-1">Scan the QR code below.</li>
+            <li>Click <strong>Next</strong> and enter the 6-digit code.</li>
+          </ol>
+
+          <div class="text-center mb-3">
+            <img [src]="qrCodeUri()" alt="TOTP QR code" class="img-fluid border rounded" style="max-width:200px" />
+          </div>
+
+          <details class="mb-3">
+            <summary class="text-muted small" style="cursor:pointer">Can't scan? Enter code manually</summary>
+            <code class="d-block bg-light px-3 py-2 rounded mt-2 text-break small">{{ secret() }}</code>
+          </details>
+
+          <button type="button" class="btn btn-primary w-100" (click)="proceed()">
+            <i class="bi bi-arrow-right me-2"></i>Next — Enter code
+          </button>
+        }
+
+        @case ('confirm') {
+          @if (error()) {
+            <div class="alert alert-danger small py-2" role="alert">
+              <i class="bi bi-exclamation-circle me-1"></i>{{ error() }}
+            </div>
+          }
+
+          <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+            <div class="mb-3">
+              <label for="totp-code" class="form-label">6-digit code from your authenticator app</label>
+              <input
+                id="totp-code"
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                class="form-control form-control-lg text-center"
+                formControlName="code"
+                [class.is-invalid]="isInvalid()"
+                placeholder="000000"
+                maxlength="6"
+                autofocus
+              />
+              @if (isInvalid()) {
+                <div class="invalid-feedback">Enter the 6-digit code from your authenticator app.</div>
+              }
+            </div>
+
+            <button type="submit" class="btn btn-success w-100" [disabled]="loading()">
+              @if (loading()) {
+                <span class="spinner-border spinner-border-sm me-2"></span>Verifying…
+              } @else {
+                <i class="bi bi-check-lg me-2"></i>Activate MFA
+              }
+            </button>
+          </form>
+        }
+
+        @case ('backup') {
+          <div class="alert alert-warning small" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            <strong>Save these backup codes now.</strong>
+            Each code can only be used once. They will not be shown again.
+          </div>
+
+          <div class="bg-light rounded p-3 mb-3 font-monospace">
+            @for (code of backupCodes(); track code) {
+              <div class="py-1 border-bottom border-light-subtle">{{ code }}</div>
+            }
+          </div>
+
+          <button type="button" class="btn btn-primary w-100" (click)="finish()">
+            <i class="bi bi-house me-2"></i>Continue to dashboard
+          </button>
+        }
+
+      }
+
+    </div>
+  </div>
+</div>

@@ -29,9 +29,9 @@ export class Header implements OnInit, OnDestroy {
 
   private pollHandle: ReturnType<typeof setInterval> | null = null;
 
-  protected avatarUrl = computed(() => {
-    const name = encodeURIComponent(this.auth.user()?.name ?? 'User');
-    return `https://ui-avatars.com/api/?name=${name}&size=32&background=0d6efd&color=fff`;
+  protected avatarInitials = computed(() => {
+    const name = this.auth.user()?.name ?? '';
+    return name.split(' ').map(n => n[0] ?? '').join('').slice(0, 2).toUpperCase() || '?';
   });
 
   ngOnInit(): void {
@@ -65,17 +65,12 @@ export class Header implements OnInit, OnDestroy {
   }
 
   markRead(id: string): void {
-    const notif = this.notifications().find(n => n.id === id);
-    if (!notif || notif.isRead) return;
-
     this.notificationApi.markRead(id).subscribe({
       next: () => {
-        this.notifications.update(list =>
-          list.map(n => n.id === id ? { ...n, isRead: true } : n),
-        );
+        this.notifications.update(list => list.filter(n => n.id !== id));
         this.unreadCount.update(c => Math.max(0, c - 1));
       },
-      error: () => {},
+      error: (err) => console.error('[markRead] failed', err),
     });
   }
 

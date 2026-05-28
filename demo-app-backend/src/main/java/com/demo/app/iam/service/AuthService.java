@@ -40,6 +40,9 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final PermissionCacheService permissionCacheService;
+    private final TokenDenylistService tokenDenylistService;
+    private final SessionActivityService sessionActivityService;
+    private final MfaService mfaService;
 
     @Value("${app.cookie.secure:false}")
     private boolean cookieSecure;
@@ -49,6 +52,9 @@ public class AuthService {
 
     @Value("${app.jwt.refresh-expiry-seconds:604800}")
     private int refreshExpiry;
+
+    @Value("${app.session.max-concurrent:5}")
+    private int maxConcurrentSessions;
 
     @Transactional
     public AuthResponse login(LoginRequest request, HttpServletResponse response,
@@ -76,21 +82,44 @@ public class AuthService {
         credential.setLockedUntil(null);
         credentialRepository.save(credential);
 
-        var permSet = permissionCacheService.loadPermissions(user.getId());
-        var accessToken = jwtService.generateAccessToken(user.getId(), permSet.roleId(), permSet.codes());
+        // IA-2 hard-block: unenrolled users must complete MFA setup before getting tokens
+        if (!credential.isMfaEnabled()) {
+            return AuthResponse.mfaEnrollmentRequired(mfaService.createEnrollmentToken(user.getId()));
+        }
+
+        // IA-2(1)/IA-2(2): MFA enrolled — require challenge verification before issuing tokens
+        return AuthResponse.mfaChallenge(mfaService.createChallenge(user.getId(), ipAddress));
+    }
+
+    /** Called by MfaController after successful MFA challenge verification. */
+    @Transactional
+    public AuthResponse issueTokensForUser(UUID userId, HttpServletRequest request,
+                                           HttpServletResponse response) {
+        var user = userRepository.findByIdAndDeletedAtIsNull(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+
+        // AC-10: enforce concurrent session limit
+        if (sessionActivityService.countActiveSessions(userId) >= maxConcurrentSessions) {
+            throw new ForbiddenException("Maximum concurrent sessions reached");
+        }
+
+        var permSet = permissionCacheService.loadPermissions(userId);
+        var jti = UUID.randomUUID().toString();
+        var accessToken = jwtService.generateAccessToken(userId, permSet.roleId(), permSet.codes(), jti);
         var rawRefresh = UUID.randomUUID().toString();
 
         refreshTokenRepository.save(RefreshToken.builder()
-                .userId(user.getId())
+                .userId(userId)
                 .tokenHash(sha256(rawRefresh))
                 .expiresAt(Instant.now().plusSeconds(refreshExpiry))
-                .ipAddress(ipAddress)
-                .userAgent(userAgent)
+                .ipAddress(request.getRemoteAddr())
+                .userAgent(request.getHeader("User-Agent"))
                 .build());
 
         setAccessCookie(response, accessToken);
         setRefreshCookie(response, rawRefresh);
-        return new AuthResponse(buildUserInfo(user.getId(), permSet));
+        sessionActivityService.register(jti, userId);
+        return new AuthResponse(buildUserInfo(userId, permSet));
     }
 
     @Transactional
@@ -116,7 +145,8 @@ public class AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", stored.getUserId()));
 
         var permSet = permissionCacheService.loadPermissions(user.getId());
-        var newAccess = jwtService.generateAccessToken(user.getId(), permSet.roleId(), permSet.codes());
+        var jti = UUID.randomUUID().toString();
+        var newAccess = jwtService.generateAccessToken(user.getId(), permSet.roleId(), permSet.codes(), jti);
         var newRaw = UUID.randomUUID().toString();
 
         refreshTokenRepository.save(RefreshToken.builder()
@@ -127,14 +157,27 @@ public class AuthService {
 
         setAccessCookie(response, newAccess);
         setRefreshCookie(response, newRaw);
+        sessionActivityService.register(jti, user.getId());
         return new AuthResponse(buildUserInfo(user.getId(), permSet));
     }
 
     @Transactional
     public void logout(HttpServletRequest request, HttpServletResponse response) {
-        var rawToken = extractCookie(request, "refresh-token");
-        if (rawToken != null) {
-            refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(sha256(rawToken))
+        // Revoke access token immediately via denylist (AC-12) and deregister session (AC-10)
+        var rawAccess = extractCookie(request, "access-token");
+        if (rawAccess != null) {
+            try {
+                var claims = jwtService.validateAndParse(rawAccess);
+                var jti = claims.getId();
+                if (jti != null) {
+                    tokenDenylistService.deny(jti, claims.getExpiration().toInstant());
+                    sessionActivityService.deregister(jti, UUID.fromString(claims.getSubject()));
+                }
+            } catch (Exception ignored) {}
+        }
+        var rawRefresh = extractCookie(request, "refresh-token");
+        if (rawRefresh != null) {
+            refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(sha256(rawRefresh))
                     .ifPresent(t -> {
                         t.setRevokedAt(Instant.now());
                         refreshTokenRepository.save(t);

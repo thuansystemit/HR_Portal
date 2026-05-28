@@ -16,10 +16,11 @@ public class JwtService {
 
     private final JwtConfig jwtConfig;
 
-    public String generateAccessToken(UUID userId, UUID roleId, Set<String> permissions) {
+    public String generateAccessToken(UUID userId, UUID roleId, Set<String> permissions, String jti) {
         var now = System.currentTimeMillis();
         var exp = now + jwtConfig.getAccessExpirySeconds() * 1000L;
         return Jwts.builder()
+                .id(jti)                                 // jti — required for denylist (AC-12) and session tracking
                 .subject(userId.toString())
                 .claim("roleId", roleId != null ? roleId.toString() : null)
                 .claim("permissions", permissions)

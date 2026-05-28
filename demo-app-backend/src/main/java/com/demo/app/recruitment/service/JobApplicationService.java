@@ -93,6 +93,41 @@ public class JobApplicationService {
                 .toList();
     }
 
+    public BatchApplyResult batchApply(UUID jobPostingId, BatchApplyRequest req, UUID moverId) {
+        var posting = jobPostingRepository.findById(jobPostingId)
+                .orElseThrow(() -> new ResourceNotFoundException("JobPosting", jobPostingId));
+        if (!"OPEN".equals(posting.getStatus())) {
+            throw new IllegalStateException("Job posting is not open for applications");
+        }
+
+        var applied = new ArrayList<ApplicationResponse>();
+        var skipped = new ArrayList<UUID>();
+
+        for (UUID candidateId : req.cvCandidateIds()) {
+            if (jobApplicationRepository.existsByJobPostingIdAndCvCandidateId(jobPostingId, candidateId)) {
+                skipped.add(candidateId);
+            } else {
+                var application = JobApplication.builder()
+                        .jobPostingId(jobPostingId)
+                        .cvCandidateId(candidateId)
+                        .stage("APPLIED")
+                        .notes(req.notes())
+                        .build();
+                var saved = jobApplicationRepository.save(application);
+                stageHistoryRepository.save(ApplicationStageHistory.builder()
+                        .applicationId(saved.getId())
+                        .fromStage(null)
+                        .toStage("APPLIED")
+                        .movedBy(moverId)
+                        .notes(req.notes())
+                        .build());
+                hiringStatusService.recalculate(candidateId);
+                applied.add(toResponse(saved));
+            }
+        }
+        return new BatchApplyResult(applied, skipped);
+    }
+
     public ApplicationResponse moveStage(UUID jobPostingId, UUID appId, MoveStageRequest req, UUID moverId) {
         if (!VALID_STAGES.contains(req.stage())) {
             throw new IllegalArgumentException("Invalid stage: " + req.stage());

@@ -9,6 +9,16 @@ export const routes: Routes = [
     canActivate: [guestGuard],
   },
   {
+    path: 'mfa-verify',
+    loadComponent: () => import('./auth/pages/mfa-verify/mfa-verify').then(m => m.MfaVerify),
+    canActivate: [guestGuard],
+  },
+  {
+    path: 'mfa-setup',
+    loadComponent: () => import('./auth/pages/mfa-setup/mfa-setup').then(m => m.MfaSetup),
+    canActivate: [guestGuard],
+  },
+  {
     path: '',
     component: Shell,
     canActivate: [authGuard],

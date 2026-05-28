@@ -56,6 +56,22 @@
       <h2 class="lp-form-title">Welcome back</h2>
       <p class="lp-form-subtitle">Sign in to your account to continue</p>
 
+      <!-- AC-8: System Use Notification — must be acknowledged before sign-in -->
+      @if (bannerText()) {
+        <div class="alert alert-warning border-warning mb-3 small" role="alert">
+          <div class="fw-semibold mb-1"><i class="bi bi-shield-exclamation me-1"></i>System Use Notification</div>
+          <p class="mb-2">{{ bannerText() }}</p>
+          <div class="form-check">
+            <input type="checkbox" class="form-check-input" id="bannerAck"
+                   [checked]="bannerAcknowledged()"
+                   (change)="bannerAcknowledged.set(!bannerAcknowledged())">
+            <label class="form-check-label" for="bannerAck">
+              I have read and acknowledge this notice.
+            </label>
+          </div>
+        </div>
+      }
+
       @if (error()) {
         <div class="lp-error-banner">
           <i class="bi bi-exclamation-circle-fill"></i>
@@ -109,7 +125,8 @@
         </div>
 
         <!-- Submit -->
-        <button type="submit" class="lp-submit-btn" [disabled]="loading()">
+        <button type="submit" class="lp-submit-btn"
+                [disabled]="loading() || !bannerAcknowledged()">
           @if (loading()) {
             <span class="spinner-border spinner-border-sm"></span>
             Signing in…

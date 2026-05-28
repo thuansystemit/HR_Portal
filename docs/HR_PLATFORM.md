@@ -387,7 +387,7 @@ Document Management uses per-category role visibility (canView, canUpload, canDe
 |----------|---------------|--------|
 | Apply candidate to job from search results | "Apply to Job" button per search result row | ✅ Sprint 1 |
 | Apply candidate from Kanban board | "Apply Candidate" action on Job Board | ✅ |
-| Batch-apply multiple candidates | Not built | 🔲 GAP G4 (WF-11) |
+| Batch-apply multiple candidates | Implemented — row checkboxes in posting context; "Apply X Selected" toolbar; `POST /applications/batch`; result banner (X applied, Y already in pipeline); search auto-refreshes | ✅ WF-11 |
 | Prevent duplicate applications — "already applied" indicator | `alreadyApplied` bool on search results; "Applied" badge when searching in posting context | ✅ WF-5 |
 | View candidates per stage on Kanban board | Job Board columns: Applied → Screening → Interview → Offer → Hired / Rejected | ✅ |
 | Move candidate between stages with notes | Angular signal-controlled dropdown (position:fixed to escape overflow clipping); stage transition with audit log | ✅ |
@@ -547,13 +547,9 @@ Document Management uses per-category role visibility (canView, canUpload, canDe
 
 ---
 
-#### G4 — No Batch Apply (LOW)
+#### ~~G4~~ — Batch Apply — ✅ RESOLVED 2026-05-27 (WF-11)
 
-**What users try to do:** Shortlist 10 candidates from search results and apply all of them to a posting at once.
-
-**What happens today:** Each "Apply to Job" action is individual. The user must open the modal, select the posting, submit, close — and repeat for each candidate.
-
-**Ideal experience:** Row checkboxes on search results + "Apply Selected" button that submits all selected candidates to one posting.
+Row checkboxes appear on Candidate Search when navigated from a job posting context (`?forJobPostingId`). Selecting ≥1 candidate reveals an "Apply X Selected" toolbar. On click, `POST /applications/batch` applies all new candidates in one request; already-applied candidates are silently skipped and counted in the result banner. Search auto-refreshes so "Applied" badges update immediately.
 
 ---
 
@@ -850,6 +846,7 @@ Sprint 3         ── Onboarding prep + analytics enhancements
                     ✅ WF-6 + WF-12: Chart drill-down (funnel + skills)
                     ✅ WF-9: Structured required skills on job postings
                     ✅ WF-10: Job fit score badge on Kanban cards
+                    ✅ WF-11: Batch-apply candidates from search results
                     🔲 WF-13: Time-to-hire chart drill-down (blocked)
 ```
 
@@ -888,7 +885,7 @@ Sprint 3         ── Onboarding prep + analytics enhancements
 |----------|-----------|---------------------|--------|--------|
 | WF-9 | As an HR officer, I want to add structured required skills to a job posting (tag input), so that the system can match candidates automatically. | `V23__job_posting_skills.sql`, `JobPostingSkill` entity/repo, `JobPostingSkillDto`, `GET/PUT /{id}/skills`, `recruitment.model.ts`, `recruitment.api.ts`, `job-form.page.ts/html` | L | ✅ Done |
 | WF-10 | As an HR officer, I want the system to show a job fit score when viewing candidates for a posting. | `ApplicationResponse.java` (`fitScore: Integer`), `JobApplicationService.computeFitScore()` (required skills vs. candidate skills), `job-board.page.ts` (`fitScoreBadgeClass()`), `job-board.page.html` (color-coded `% fit` badge on Kanban cards); depends on WF-9 | L | ✅ Done |
-| WF-11 | As an HR officer, I want to batch-apply multiple candidates from search results to a posting at once. | `candidate-search.page.ts` (row checkboxes), `POST /api/v1/recruitment/job-postings/{id}/applications/batch` | M | 🔲 |
+| WF-11 | As an HR officer, I want to batch-apply multiple candidates from search results to a posting at once. | `BatchApplyRequest/Result` DTOs, `JobApplicationService.batchApply()`, `POST /{jobId}/applications/batch`, `candidate-search.page.ts` (checkboxes + toolbar + result banner, posting-context-only) | M | ✅ Done |
 | WF-12 | As an HR manager, I want to click a skill on the Top Skills chart to open Candidate Search pre-filled with that skill. | `hr-analytics.page.ts` (click handler, router navigate), `candidate-search.page.ts` (skills query param + auto-search) | S | ✅ Done |
 | WF-13 | As an HR manager, I want to click a job posting on the Time-to-Hire chart to open its Kanban board. | `hr-analytics.page.ts` (click handler), `TimeToHireEntry` (add jobPostingId) | S | 🔲 |
 
@@ -939,7 +936,7 @@ Sprint 3         ── Onboarding prep + analytics enhancements
 | # | Story | Gaps Closed | Business Justification | Effort |
 |---|-------|-------------|----------------------|--------|
 | 13 | **~~WF-10~~** ✅ — Job fit scoring (candidate skills vs. posting required skills) | G1 | Delivered 2026-05-26. `fitScore` on `ApplicationResponse`; color-coded fit badge on Kanban cards. Depends on WF-9. | L |
-| 14 | **WF-11** — Batch-apply candidates from search results | G4 | Efficiency gain for high-volume roles. | M |
+| 14 | **~~WF-11~~** ✅ — Batch-apply candidates from search results | G4 | Delivered 2026-05-27. Checkboxes appear in posting context; "Apply X Selected" button; skipped candidates counted but not errored. | M |
 | 15 | **G12** — Report export (PDF / Excel) from HR Analytics | G12 | Enables offline sharing of metrics in leadership meetings. | M |
 | 16 | **G7** — Offer term tracking (salary, start date, status) | G7 | Brings the offer process into the system instead of spreadsheets. | M |
 | 17 | **G9** — Auto-close posting prompt when candidate is hired | G9 | Prevents stale open postings. | S |
@@ -1037,7 +1034,7 @@ The "Dev Team" group presents the Dev Team's own UI experience:
 | WF-12 — Clickable top skills chart | G10 | Sprint 3 | ✅ Done | P3 |
 | WF-13 — Clickable time-to-hire chart | G10 | Sprint 3 | 🔲 (blocked) | P3 |
 | WF-10 — Job fit scoring | G1 | Sprint 3 | ✅ Done | ~~P4~~ |
-| WF-11 — Batch-apply candidates | G4 | Future | 🔲 | P4 |
+| WF-11 — Batch-apply candidates | G4 | Sprint 3 | ✅ Done | ~~P4~~ |
 | G7 — Offer term tracking | G7 | Future | 🔲 | P4 |
 | G9 — Auto-close posting | G9 | Future | 🔲 | P4 |
 | G12 — Report export | G12 | Future | 🔲 | P4 |

@@ -98,6 +98,18 @@
     <div class="alert alert-danger">{{ store.error() }}</div>
   }
 
+  <!-- Batch-apply result banner -->
+  @if (batchResult()) {
+    <div class="alert alert-success d-flex align-items-center gap-2 mb-3 py-2 alert-dismissible">
+      <i class="bi bi-check-circle-fill"></i>
+      <span>
+        <strong>{{ batchResult()!.applied }}</strong> applied,
+        <strong>{{ batchResult()!.skipped }}</strong> already in pipeline.
+      </span>
+      <button type="button" class="btn-close ms-auto" (click)="batchResult.set(null)"></button>
+    </div>
+  }
+
   <!-- Results -->
   @if (hasSearched()) {
     <div class="d-flex align-items-center justify-content-between mb-2">
@@ -109,6 +121,17 @@
         }
       </small>
     </div>
+
+    @if (forJobPostingId() && selectedIds().size > 0) {
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <app-btn icon="bi-person-check-fill" [loading]="batchLoading()" (btnClick)="applySelected()">
+          Apply {{ selectedIds().size }} Selected
+        </app-btn>
+        <button class="btn btn-sm btn-outline-secondary" (click)="clearSelection()">
+          Clear selection
+        </button>
+      </div>
+    }
 
     <app-data-table
       [columns]="columns()"
@@ -168,6 +191,17 @@
     {{ row.city }}@if (row.city && row.country) {, }{{ row.country }}
   } @else {
     <span class="text-muted">-</span>
+  }
+</ng-template>
+
+<!-- Batch-select checkbox -->
+<ng-template #batchSelectTpl let-row="row">
+  @if (forJobPostingId()) {
+    <input type="checkbox"
+           class="form-check-input"
+           [checked]="isSelected($any(row).candidateId)"
+           (change)="toggleSelect($any(row).candidateId)"
+           (click)="$event.stopPropagation()" />
   }
 </ng-template>
 

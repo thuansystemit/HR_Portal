@@ -1,7 +1,12 @@
 package com.demo.app.recruitment;
 
 import com.demo.app.recruitment.controller.JobApplicationController;
-import com.demo.app.recruitment.dto.*;
+import com.demo.app.recruitment.dto.ApplicationResponse;
+import com.demo.app.recruitment.dto.BatchApplyRequest;
+import com.demo.app.recruitment.dto.BatchApplyResult;
+import com.demo.app.recruitment.dto.BoardResponse;
+import com.demo.app.recruitment.dto.CreateApplicationRequest;
+import com.demo.app.recruitment.dto.MoveStageRequest;
 import com.demo.app.recruitment.service.JobApplicationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -81,6 +86,21 @@ class JobApplicationControllerTest {
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(result.getBody()).isEqualTo(response);
+    }
+
+    @Test
+    void batchApply_returns200_withResult() {
+        when(authentication.getName()).thenReturn(USER_ID.toString());
+        var req = new BatchApplyRequest(List.of(CANDIDATE_ID), "Bulk");
+        var batchResult = new BatchApplyResult(List.of(buildResponse()), List.of());
+        when(jobApplicationService.batchApply(POSTING_ID, req, USER_ID)).thenReturn(batchResult);
+
+        var result = controller.batchApply(POSTING_ID, req, authentication);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(result.getBody()).isNotNull();
+        assertThat(result.getBody().applied()).hasSize(1);
+        assertThat(result.getBody().skipped()).isEmpty();
     }
 
     private ApplicationResponse buildResponse() {

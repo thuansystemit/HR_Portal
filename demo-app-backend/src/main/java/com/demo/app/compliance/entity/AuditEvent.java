@@ -46,6 +46,14 @@ public class AuditEvent {
     @Column(nullable = false, length = 20)
     private String outcome = "success";
 
+    // AU-3: correlation ID ties this event to its originating HTTP request
+    @Column(length = 36)
+    private String correlationId;
+
+    // AU-3: session ID (JWT jti) to trace all events within a user session
+    @Column(length = 36)
+    private String sessionId;
+
     @Builder.Default
     @Column(nullable = false, updatable = false)
     private Instant occurredAt = Instant.now();

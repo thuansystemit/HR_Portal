@@ -51,9 +51,10 @@
                       </div>
                     </div>
                     @if (!notif.isRead) {
-                      <button class="btn btn-link btn-sm text-primary p-0 flex-shrink-0 small"
+                      <button type="button"
+                              class="btn btn-link btn-sm text-primary p-0 flex-shrink-0 small"
                               style="font-size:.7rem; white-space:nowrap"
-                              (click)="markRead(notif.id)">
+                              (click)="$event.stopPropagation(); markRead(notif.id)">
                         Mark read
                       </button>
                     }
@@ -74,7 +75,10 @@
         (click)="toggleMenu()"
         [attr.aria-expanded]="menuOpen()"
       >
-        <img [src]="avatarUrl()" class="rounded-circle" width="30" height="30" alt="avatar" />
+        <svg width="30" height="30" viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect width="30" height="30" rx="15" fill="#0d6efd"/>
+          <text x="15" y="20" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="600" fill="#fff">{{ avatarInitials() }}</text>
+        </svg>
         <span class="d-none d-md-inline small fw-semibold">{{ auth.user()?.name }}</span>
         <span class="d-none d-lg-inline badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle small">
           {{ auth.user()?.roleName }}
@@ -85,7 +89,10 @@
       <div class="hdr-dropdown shadow-sm">
         <!-- User info header -->
         <div class="d-flex align-items-center gap-3 px-3 py-3 border-bottom">
-          <img [src]="avatarUrl()" class="rounded-circle flex-shrink-0" width="40" height="40" alt="avatar" />
+          <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" class="flex-shrink-0">
+            <rect width="40" height="40" rx="20" fill="#0d6efd"/>
+            <text x="20" y="26" text-anchor="middle" font-family="sans-serif" font-size="15" font-weight="600" fill="#fff">{{ avatarInitials() }}</text>
+          </svg>
           <div class="overflow-hidden">
             <div class="fw-semibold small text-truncate">{{ auth.user()?.name }}</div>
             <div class="text-muted text-truncate" style="font-size:.72rem">{{ auth.user()?.email }}</div>

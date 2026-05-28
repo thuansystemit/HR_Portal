@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+    <!--
+        Add suppressions here ONLY when:
+        1. The CVE is a confirmed false positive for this codebase
+        2. A compensating control is in place and documented
+        3. A re-review date is set (max 90 days)
+
+        Template:
+        <suppress>
+            <notes>CVE-YYYY-XXXXX: [reason this does not apply / compensating control].
+                   Reviewed: YYYY-MM-DD. Re-review by: YYYY-MM-DD.</notes>
+            <cve>CVE-YYYY-XXXXX</cve>
+        </suppress>
+    -->
+</suppressions>

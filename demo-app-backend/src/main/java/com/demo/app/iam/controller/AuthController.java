@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -20,7 +21,19 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AuthController {
 
+    private static final String SYSTEM_BANNER =
+            "WARNING: This is a U.S. Government information system. " +
+            "By using this system, you consent to monitoring and recording. " +
+            "Unauthorized use is prohibited and subject to criminal and civil penalties. " +
+            "Use of this system implies agreement with all applicable agency policies.";
+
     private final AuthService authService;
+
+    // AC-8: System-use notification — public endpoint, displayed before login
+    @GetMapping("/banner")
+    public ResponseEntity<Map<String, String>> banner() {
+        return ResponseEntity.ok(Map.of("message", SYSTEM_BANNER));
+    }
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@RequestBody @Valid LoginRequest request,

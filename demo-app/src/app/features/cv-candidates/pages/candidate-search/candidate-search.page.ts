@@ -23,10 +23,11 @@ export class CandidateSearchPage implements OnInit {
   private  readonly fb             = inject(FormBuilder);
   private  readonly recruitmentApi = inject(RecruitmentApi);
 
-  @ViewChild('scoreTpl',    { static: true }) scoreTpl!:    TemplateRef<{ $implicit: unknown; row: unknown }>;
-  @ViewChild('skillsTpl',   { static: true }) skillsTpl!:   TemplateRef<{ $implicit: unknown; row: unknown }>;
-  @ViewChild('locationTpl', { static: true }) locationTpl!: TemplateRef<{ $implicit: unknown; row: unknown }>;
-  @ViewChild('actionsTpl',  { static: true }) actionsTpl!:  TemplateRef<{ $implicit: unknown; row: unknown }>;
+  @ViewChild('scoreTpl',       { static: true }) scoreTpl!:       TemplateRef<{ $implicit: unknown; row: unknown }>;
+  @ViewChild('skillsTpl',      { static: true }) skillsTpl!:      TemplateRef<{ $implicit: unknown; row: unknown }>;
+  @ViewChild('locationTpl',    { static: true }) locationTpl!:    TemplateRef<{ $implicit: unknown; row: unknown }>;
+  @ViewChild('actionsTpl',     { static: true }) actionsTpl!:     TemplateRef<{ $implicit: unknown; row: unknown }>;
+  @ViewChild('batchSelectTpl', { static: true }) batchSelectTpl!: TemplateRef<{ $implicit: unknown; row: unknown }>;
 
   protected form!: FormGroup;
   protected columns   = signal<TableColumn[]>([]);
@@ -52,6 +53,11 @@ export class CandidateSearchPage implements OnInit {
   protected applyError        = signal<string | null>(null);
   protected applySuccess      = signal<string | null>(null);
 
+  /** Batch-apply state — only active when forJobPostingId is set */
+  protected selectedIds  = signal<Set<string>>(new Set());
+  protected batchLoading = signal(false);
+  protected batchResult  = signal<{ applied: number; skipped: number } | null>(null);
+
   ngOnInit(): void {
     this.form = this.fb.group({
       title:               [''],
@@ -76,7 +82,10 @@ export class CandidateSearchPage implements OnInit {
       Promise.resolve().then(() => this.onSearch());
     }
 
-    this.columns.set([
+    const checkboxCol: TableColumn = {
+      key: 'select', label: '', align: 'center', cellTemplate: this.batchSelectTpl,
+    };
+    const baseCols: TableColumn[] = [
       { key: 'relevanceScore', label: 'Score',       sortable: true, align: 'center', cellTemplate: this.scoreTpl },
       { key: 'fullName',       label: 'Name',        sortable: true, filterable: true },
       { key: 'currentTitle',   label: 'Current Title', sortable: true },
@@ -86,7 +95,8 @@ export class CandidateSearchPage implements OnInit {
       { key: 'city',           label: 'Location',    cellTemplate: this.locationTpl },
       { key: 'email',          label: 'Email' },
       { key: 'actions',        label: '',             align: 'center', cellTemplate: this.actionsTpl },
-    ]);
+    ];
+    this.columns.set(this.forJobPostingId() ? [checkboxCol, ...baseCols] : baseCols);
   }
 
   // ── Skill tag management ──────────────────────────────────────
@@ -197,6 +207,46 @@ export class CandidateSearchPage implements OnInit {
       error: err => {
         this.applyLoading.set(false);
         this.applyError.set(err.error?.message || 'Failed to apply candidate.');
+      },
+    });
+  }
+
+  // ── Batch-apply ───────────────────────────────────────────────
+
+  clearSelection(): void {
+    this.selectedIds.set(new Set());
+  }
+
+  toggleSelect(candidateId: string): void {
+    this.selectedIds.update(set => {
+      const next = new Set(set);
+      next.has(candidateId) ? next.delete(candidateId) : next.add(candidateId);
+      return next;
+    });
+  }
+
+  isSelected(candidateId: string): boolean {
+    return this.selectedIds().has(candidateId);
+  }
+
+  applySelected(): void {
+    const jobId = this.forJobPostingId();
+    if (!jobId || this.selectedIds().size === 0) return;
+    this.batchLoading.set(true);
+    this.batchResult.set(null);
+    this.recruitmentApi.batchApply(jobId, {
+      cvCandidateIds: [...this.selectedIds()],
+    }).subscribe({
+      next: result => {
+        this.batchLoading.set(false);
+        this.batchResult.set({ applied: result.applied.length, skipped: result.skipped.length });
+        this.selectedIds.set(new Set());
+        // refresh search to update "Applied" badges
+        this.onSearch();
+      },
+      error: () => {
+        this.batchLoading.set(false);
+        this.batchResult.set(null);
       },
     });
   }

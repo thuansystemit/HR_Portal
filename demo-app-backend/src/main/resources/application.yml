@@ -56,6 +56,13 @@ app:
   jwt:
     access-expiry-seconds: ${JWT_ACCESS_EXPIRY:900}
     refresh-expiry-seconds: ${JWT_REFRESH_EXPIRY:604800}
+    keystore:
+      path: ${JWT_KEYSTORE_PATH:}              # Mount as Docker/K8s secret; empty = ephemeral (dev only)
+      password: ${JWT_KEYSTORE_PASSWORD:changeit}
+      alias: ${JWT_KEYSTORE_ALIAS:hrportal-jwt}
+  session:
+    idle-timeout-seconds: ${SESSION_IDLE_TIMEOUT:1800}   # 30 min (FedRAMP AC-11 max)
+    max-concurrent: ${SESSION_MAX_CONCURRENT:5}           # AC-10 concurrent session cap
   cookie:
     secure: ${COOKIE_SECURE:false}
   cors:

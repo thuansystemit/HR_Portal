@@ -4,7 +4,7 @@ import com.demo.app.compliance.entity.AuditEvent;
 import com.demo.app.compliance.repository.AuditEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Async;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,22 +19,26 @@ public class AuditService {
 
     private final AuditEventRepository repository;
 
-    @Async
+    /**
+     * Write an audit record synchronously in a new transaction (AU-5).
+     * Using REQUIRES_NEW so this commits even if the caller's transaction rolls back.
+     * Synchronous — if this fails, the exception propagates and the business operation fails too,
+     * ensuring no unaudited state changes (AU-5: response to audit failures).
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void log(UUID actorId, String action, String entityType, UUID entityId,
                     Map<String, Object> before, Map<String, Object> after, String outcome) {
-        try {
-            repository.save(AuditEvent.builder()
-                    .actorId(actorId)
-                    .action(action)
-                    .entityType(entityType)
-                    .entityId(entityId)
-                    .beforeState(before)
-                    .afterState(after)
-                    .outcome(outcome)
-                    .build());
-        } catch (Exception e) {
-            log.error("Failed to save audit event: action={}, entity={}", action, entityType, e);
-        }
+        repository.save(AuditEvent.builder()
+                .actorId(actorId)
+                .action(action)
+                .entityType(entityType)
+                .entityId(entityId)
+                .beforeState(before)
+                .afterState(after)
+                .outcome(outcome)
+                .correlationId(MDC.get("requestId"))
+                .sessionId(MDC.get("sessionId"))
+                .ipAddress(MDC.get("clientIp"))
+                .build());
     }
 }

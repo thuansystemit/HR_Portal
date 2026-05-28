@@ -6,6 +6,7 @@ import com.demo.app.cv.repository.CvCandidateRepository;
 import com.demo.app.cv.repository.CvTechnicalSkillRepository;
 import com.demo.app.platform.exception.ConflictException;
 import com.demo.app.platform.exception.ResourceNotFoundException;
+import com.demo.app.recruitment.dto.BatchApplyRequest;
 import com.demo.app.recruitment.dto.CreateApplicationRequest;
 import com.demo.app.recruitment.dto.MoveStageRequest;
 import com.demo.app.recruitment.entity.JobApplication;
@@ -46,10 +47,11 @@ class JobApplicationServiceTest {
     @InjectMocks
     JobApplicationService jobApplicationService;
 
-    private final UUID POSTING_ID = UUID.randomUUID();
-    private final UUID APP_ID     = UUID.randomUUID();
-    private final UUID CANDIDATE_ID = UUID.randomUUID();
-    private final UUID MOVER_ID   = UUID.randomUUID();
+    private final UUID POSTING_ID    = UUID.randomUUID();
+    private final UUID APP_ID        = UUID.randomUUID();
+    private final UUID CANDIDATE_ID  = UUID.randomUUID();
+    private final UUID CANDIDATE_ID_2 = UUID.randomUUID();
+    private final UUID MOVER_ID      = UUID.randomUUID();
 
     // ── apply ─────────────────────────────────────────────────────────────────
 
@@ -342,6 +344,103 @@ class JobApplicationServiceTest {
         assertThat(result.fitScore()).isEqualTo(100);
     }
 
+    // ── batchApply ────────────────────────────────────────────────────────────
+
+    @Test
+    void batchApply_allNew_appliesAll() {
+        var posting = buildPosting("OPEN");
+        var saved1 = buildApplicationForCandidate(CANDIDATE_ID);
+        var saved2 = buildApplicationForCandidate(CANDIDATE_ID_2);
+        var req = new BatchApplyRequest(List.of(CANDIDATE_ID, CANDIDATE_ID_2), "Bulk apply");
+
+        when(jobPostingRepository.findById(POSTING_ID)).thenReturn(Optional.of(posting));
+        when(jobApplicationRepository.existsByJobPostingIdAndCvCandidateId(POSTING_ID, CANDIDATE_ID))
+                .thenReturn(false);
+        when(jobApplicationRepository.existsByJobPostingIdAndCvCandidateId(POSTING_ID, CANDIDATE_ID_2))
+                .thenReturn(false);
+        when(jobApplicationRepository.save(any())).thenAnswer(inv -> {
+            JobApplication a = inv.getArgument(0);
+            return CANDIDATE_ID_2.equals(a.getCvCandidateId()) ? saved2 : saved1;
+        });
+        when(stageHistoryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(cvCandidateRepository.findById(any())).thenReturn(Optional.empty());
+
+        var result = jobApplicationService.batchApply(POSTING_ID, req, MOVER_ID);
+
+        assertThat(result.applied()).hasSize(2);
+        assertThat(result.skipped()).isEmpty();
+        verify(hiringStatusService).recalculate(CANDIDATE_ID);
+        verify(hiringStatusService).recalculate(CANDIDATE_ID_2);
+    }
+
+    @Test
+    void batchApply_allDuplicate_skipsAll() {
+        var posting = buildPosting("OPEN");
+        var req = new BatchApplyRequest(List.of(CANDIDATE_ID, CANDIDATE_ID_2), null);
+
+        when(jobPostingRepository.findById(POSTING_ID)).thenReturn(Optional.of(posting));
+        when(jobApplicationRepository.existsByJobPostingIdAndCvCandidateId(POSTING_ID, CANDIDATE_ID))
+                .thenReturn(true);
+        when(jobApplicationRepository.existsByJobPostingIdAndCvCandidateId(POSTING_ID, CANDIDATE_ID_2))
+                .thenReturn(true);
+
+        var result = jobApplicationService.batchApply(POSTING_ID, req, MOVER_ID);
+
+        assertThat(result.applied()).isEmpty();
+        assertThat(result.skipped()).containsExactlyInAnyOrder(CANDIDATE_ID, CANDIDATE_ID_2);
+        verify(jobApplicationRepository, never()).save(any());
+        verify(hiringStatusService, never()).recalculate(any());
+    }
+
+    @Test
+    void batchApply_mixed_appliesNewSkipsDuplicate() {
+        var posting = buildPosting("OPEN");
+        var saved1 = buildApplicationForCandidate(CANDIDATE_ID);
+        var req = new BatchApplyRequest(List.of(CANDIDATE_ID, CANDIDATE_ID_2), "Mixed");
+
+        when(jobPostingRepository.findById(POSTING_ID)).thenReturn(Optional.of(posting));
+        when(jobApplicationRepository.existsByJobPostingIdAndCvCandidateId(POSTING_ID, CANDIDATE_ID))
+                .thenReturn(false);
+        when(jobApplicationRepository.existsByJobPostingIdAndCvCandidateId(POSTING_ID, CANDIDATE_ID_2))
+                .thenReturn(true);
+        when(jobApplicationRepository.save(any())).thenReturn(saved1);
+        when(stageHistoryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(cvCandidateRepository.findById(any())).thenReturn(Optional.empty());
+
+        var result = jobApplicationService.batchApply(POSTING_ID, req, MOVER_ID);
+
+        assertThat(result.applied()).hasSize(1);
+        assertThat(result.skipped()).containsExactly(CANDIDATE_ID_2);
+        verify(hiringStatusService).recalculate(CANDIDATE_ID);
+        verify(hiringStatusService, never()).recalculate(CANDIDATE_ID_2);
+    }
+
+    @Test
+    void batchApply_throws_whenPostingNotOpen() {
+        var posting = buildPosting("CLOSED");
+        var req = new BatchApplyRequest(List.of(CANDIDATE_ID), null);
+
+        when(jobPostingRepository.findById(POSTING_ID)).thenReturn(Optional.of(posting));
+
+        assertThatThrownBy(() -> jobApplicationService.batchApply(POSTING_ID, req, MOVER_ID))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not open");
+
+        verify(jobApplicationRepository, never()).save(any());
+    }
+
+    @Test
+    void batchApply_throws_whenPostingNotFound() {
+        var req = new BatchApplyRequest(List.of(CANDIDATE_ID), null);
+
+        when(jobPostingRepository.findById(POSTING_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> jobApplicationService.batchApply(POSTING_ID, req, MOVER_ID))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(jobApplicationRepository, never()).save(any());
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private JobPosting buildPosting(String status) {
@@ -404,6 +503,17 @@ class JobApplicationServiceTest {
                 .id(UUID.randomUUID())
                 .cvCandidateId(CANDIDATE_ID)
                 .skillName(name)
+                .build();
+    }
+
+    private JobApplication buildApplicationForCandidate(UUID candidateId) {
+        return JobApplication.builder()
+                .id(UUID.randomUUID())
+                .jobPostingId(POSTING_ID)
+                .cvCandidateId(candidateId)
+                .stage("APPLIED")
+                .appliedAt(Instant.now())
+                .updatedAt(Instant.now())
                 .build();
     }
 }

@@ -41,6 +41,15 @@ public class JobApplicationController {
         return ResponseEntity.ok(jobApplicationService.getBoard(jobId));
     }
 
+    @PostMapping("/applications/batch")
+    public ResponseEntity<BatchApplyResult> batchApply(
+            @PathVariable UUID jobId,
+            @RequestBody @Valid BatchApplyRequest request,
+            Authentication authentication) {
+        var moverId = UUID.fromString(authentication.getName());
+        return ResponseEntity.ok(jobApplicationService.batchApply(jobId, request, moverId));
+    }
+
     @PatchMapping("/applications/{appId}/stage")
     public ResponseEntity<ApplicationResponse> moveStage(
             @PathVariable UUID jobId,

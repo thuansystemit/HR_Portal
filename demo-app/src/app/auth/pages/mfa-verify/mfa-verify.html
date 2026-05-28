@@ -1,0 +1,81 @@
+<div class="d-flex align-items-center justify-content-center min-vh-100 bg-light">
+  <div class="card shadow-sm" style="width: 100%; max-width: 400px;">
+    <div class="card-body p-4">
+
+      <div class="text-center mb-4">
+        <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary bg-opacity-10 mb-3"
+             style="width:56px;height:56px">
+          <i class="bi bi-shield-lock-fill text-primary fs-4"></i>
+        </div>
+        <h1 class="h4 fw-bold mb-1">Two-Factor Authentication</h1>
+        <p class="text-muted small mb-0">
+          @if (isBackupMode()) {
+            Enter one of your 10-character backup codes.
+          } @else {
+            Enter the 6-digit code from your authenticator app.
+          }
+        </p>
+      </div>
+
+      @if (error()) {
+        <div class="alert alert-danger small py-2" role="alert">
+          <i class="bi bi-exclamation-circle me-1"></i>{{ error() }}
+        </div>
+      }
+
+      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <div class="mb-3">
+          <label for="mfa-code" class="form-label">
+            @if (isBackupMode()) { Backup code } @else { Authenticator code }
+          </label>
+          <input
+            id="mfa-code"
+            type="text"
+            class="form-control form-control-lg text-center"
+            formControlName="code"
+            [class.is-invalid]="form.get('code')?.invalid && form.get('code')?.touched"
+            [attr.inputmode]="isBackupMode() ? 'text' : 'numeric'"
+            [attr.autocomplete]="isBackupMode() ? 'off' : 'one-time-code'"
+            [placeholder]="isBackupMode() ? 'XXXXXXXXXX' : '000000'"
+            maxlength="10"
+            autofocus
+          />
+          @if (form.get('code')?.invalid && form.get('code')?.touched) {
+            <div class="invalid-feedback">
+              @if (isBackupMode()) {
+                Enter a valid 10-character backup code.
+              } @else {
+                Enter the 6-digit code from your authenticator app.
+              }
+            </div>
+          }
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100" [disabled]="loading()">
+          @if (loading()) {
+            <span class="spinner-border spinner-border-sm me-2"></span>Verifying…
+          } @else {
+            <i class="bi bi-check-lg me-2"></i>Verify
+          }
+        </button>
+      </form>
+
+      <div class="text-center mt-3">
+        <button type="button" class="btn btn-link btn-sm text-muted p-0" (click)="toggleMode()">
+          @if (isBackupMode()) {
+            Use authenticator code instead
+          } @else {
+            Use a backup code instead
+          }
+        </button>
+      </div>
+
+      <div class="text-center mt-2">
+        <a routerLink="/login" class="btn btn-link btn-sm text-muted p-0">
+          <i class="bi bi-arrow-left me-1"></i>Back to login
+        </a>
+      </div>
+
+    </div>
+  </div>
+</div>
