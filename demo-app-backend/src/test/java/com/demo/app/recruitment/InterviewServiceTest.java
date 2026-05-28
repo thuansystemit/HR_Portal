@@ -4,6 +4,7 @@ import com.demo.app.iam.entity.Role;
 import com.demo.app.iam.entity.User;
 import com.demo.app.iam.repository.RoleRepository;
 import com.demo.app.iam.repository.UserRepository;
+import com.demo.app.compliance.service.AuditService;
 import com.demo.app.platform.exception.ConflictException;
 import com.demo.app.platform.exception.ResourceNotFoundException;
 import com.demo.app.platform.notification.Notification;
@@ -40,6 +41,7 @@ class InterviewServiceTest {
     @Mock NotificationService notificationService;
     @Mock RoleRepository roleRepository;
     @Mock UserRepository userRepository;
+    @Mock AuditService auditService;
 
     @InjectMocks
     InterviewService interviewService;

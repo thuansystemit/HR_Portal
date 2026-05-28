@@ -4,6 +4,7 @@ import com.demo.app.cv.entity.CvCandidate;
 import com.demo.app.cv.entity.CvTechnicalSkill;
 import com.demo.app.cv.repository.CvCandidateRepository;
 import com.demo.app.cv.repository.CvTechnicalSkillRepository;
+import com.demo.app.compliance.service.AuditService;
 import com.demo.app.platform.exception.ConflictException;
 import com.demo.app.platform.exception.ResourceNotFoundException;
 import com.demo.app.recruitment.dto.BatchApplyRequest;
@@ -43,6 +44,7 @@ class JobApplicationServiceTest {
     @Mock CandidateHiringStatusService hiringStatusService;
     @Mock JobPostingSkillRepository jobPostingSkillRepository;
     @Mock CvTechnicalSkillRepository cvTechnicalSkillRepository;
+    @Mock AuditService auditService;
 
     @InjectMocks
     JobApplicationService jobApplicationService;

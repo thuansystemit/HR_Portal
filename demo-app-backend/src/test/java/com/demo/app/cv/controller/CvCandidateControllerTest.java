@@ -3,7 +3,9 @@ package com.demo.app.cv.controller;
 import com.demo.app.cv.dto.CvCandidateResponse;
 import com.demo.app.cv.dto.CvCandidateSimpleResult;
 import com.demo.app.cv.dto.IngestCvRequest;
+import com.demo.app.cv.dto.UpdateHiringStatusRequest;
 import com.demo.app.cv.service.CvCandidateService;
+import com.demo.app.recruitment.dto.ApplicationResponse;
 import com.demo.app.recruitment.service.JobApplicationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -133,5 +135,31 @@ class CvCandidateControllerTest {
 
         assertThat(result.getStatusCode().value()).isEqualTo(200);
         assertThat(result.getBody()).isEmpty();
+    }
+
+    @Test
+    void updateHiringStatus_returnsOk() {
+        var response = buildResponse();
+        var request = new UpdateHiringStatusRequest("HIRED");
+        when(cvCandidateService.updateHiringStatus(CANDIDATE_ID, request)).thenReturn(response);
+
+        var result = cvCandidateController.updateHiringStatus(CANDIDATE_ID, request);
+
+        assertThat(result.getStatusCode().value()).isEqualTo(200);
+        assertThat(result.getBody()).isEqualTo(response);
+    }
+
+    @Test
+    void listApplications_returnsOk() {
+        var app = new ApplicationResponse(
+                UUID.randomUUID(), UUID.randomUUID(), "Software Engineer",
+                CANDIDATE_ID, CAT_ID, "John Doe", "john@example.com",
+                "APPLIED", null, java.time.Instant.now(), null, null);
+        when(jobApplicationService.listByCandidateId(CANDIDATE_ID)).thenReturn(List.of(app));
+
+        var result = cvCandidateController.listApplications(CANDIDATE_ID);
+
+        assertThat(result.getStatusCode().value()).isEqualTo(200);
+        assertThat(result.getBody()).hasSize(1);
     }
 }

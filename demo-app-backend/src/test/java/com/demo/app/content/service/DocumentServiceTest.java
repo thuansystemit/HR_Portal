@@ -1,5 +1,6 @@
 package com.demo.app.content.service;
 
+import com.demo.app.compliance.service.AuditService;
 import com.demo.app.content.entity.Document;
 import com.demo.app.content.entity.DocumentCategory;
 import com.demo.app.content.entity.DocumentType;
@@ -7,7 +8,9 @@ import com.demo.app.content.repository.DocumentCategoryRepository;
 import com.demo.app.content.repository.DocumentRepository;
 import com.demo.app.iam.repository.UserRepository;
 import com.demo.app.insights.service.ReportService;
+import com.demo.app.platform.exception.MalwareDetectedException;
 import com.demo.app.platform.exception.ResourceNotFoundException;
+import com.demo.app.platform.security.malware.MalwareScanService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -41,6 +44,8 @@ class DocumentServiceTest {
     @Mock StorageService storageService;
     @Mock ReportService reportService;
     @Mock UserRepository userRepository;
+    @Mock MalwareScanService malwareScanService;
+    @Mock AuditService auditService;
 
     @InjectMocks
     DocumentService documentService;
@@ -76,13 +81,15 @@ class DocumentServiceTest {
             when(file.getOriginalFilename()).thenReturn("test.pdf");
             when(file.getContentType()).thenReturn("application/pdf");
             when(file.getSize()).thenReturn(1024L);
+            when(file.getBytes()).thenReturn(new byte[]{1, 2, 3});
+            when(malwareScanService.scan(any(), anyString())).thenReturn(MalwareScanService.ScanResult.clean());
             when(documentRepository.save(any())).thenReturn(doc);
             when(categoryRepository.save(any())).thenReturn(category);
 
             var result = documentService.upload(CAT_ID, USER_ID, file);
 
             assertThat(result).isNotNull();
-            verify(storageService).store(anyString(), eq(file));
+            verify(storageService).store(anyString(), any(byte[].class));
             assertThat(doc.getExtractionStatus()).isNull();
         }
     }
@@ -101,6 +108,8 @@ class DocumentServiceTest {
             when(file.getOriginalFilename()).thenReturn("cv.pdf");
             when(file.getContentType()).thenReturn("application/pdf");
             when(file.getSize()).thenReturn(512L);
+            when(file.getBytes()).thenReturn(new byte[]{1, 2, 3});
+            when(malwareScanService.scan(any(), anyString())).thenReturn(MalwareScanService.ScanResult.clean());
             when(documentRepository.save(any())).thenAnswer(inv -> {
                 Document d = inv.getArgument(0);
                 d.setId(DOC_ID);
@@ -252,14 +261,56 @@ class DocumentServiceTest {
             when(file.getOriginalFilename()).thenReturn(null);
             when(file.getContentType()).thenReturn(null);
             when(file.getSize()).thenReturn(512L);
+            when(file.getBytes()).thenReturn(new byte[]{});
+            when(malwareScanService.scan(any(), anyString())).thenReturn(MalwareScanService.ScanResult.clean());
             when(documentRepository.save(any())).thenReturn(doc);
             when(categoryRepository.save(any())).thenReturn(category);
 
             var result = documentService.upload(CAT_ID, USER_ID, file);
 
             assertThat(result).isNotNull();
-            verify(storageService).store(anyString(), eq(file));
+            verify(storageService).store(anyString(), any(byte[].class));
         }
+    }
+
+    @Test
+    void upload_throwsMalwareDetected_whenInfected() throws IOException {
+        var category = buildCategory(DocumentType.CV);
+        var file = mock(MultipartFile.class);
+
+        when(categoryRepository.findByIdAndDeletedAtIsNull(CAT_ID)).thenReturn(Optional.of(category));
+        when(file.getOriginalFilename()).thenReturn("evil.pdf");
+        when(file.getContentType()).thenReturn("application/pdf");
+        when(file.getBytes()).thenReturn(new byte[]{0x45, 0x49});
+        when(malwareScanService.scan(any(), anyString()))
+                .thenReturn(MalwareScanService.ScanResult.infected("Eicar-Signature"));
+
+        assertThatThrownBy(() -> documentService.upload(CAT_ID, USER_ID, file))
+                .isInstanceOf(MalwareDetectedException.class)
+                .hasMessageContaining("Eicar-Signature");
+
+        verify(storageService, never()).store(anyString(), any(byte[].class));
+        verify(auditService).log(eq(USER_ID), eq("DOCUMENT_MALWARE_BLOCKED"),
+                eq("DocumentCategory"), eq(CAT_ID), any(), any(), eq("blocked"));
+    }
+
+    @Test
+    void upload_throwsIllegalState_whenScanErrorAndFailClosed() throws IOException {
+        var category = buildCategory(DocumentType.CV);
+        var file = mock(MultipartFile.class);
+
+        when(categoryRepository.findByIdAndDeletedAtIsNull(CAT_ID)).thenReturn(Optional.of(category));
+        when(file.getOriginalFilename()).thenReturn("cv.pdf");
+        when(file.getContentType()).thenReturn("application/pdf");
+        when(file.getBytes()).thenReturn(new byte[]{1, 2, 3});
+        when(malwareScanService.scan(any(), anyString()))
+                .thenReturn(MalwareScanService.ScanResult.error("clamd unreachable"));
+
+        assertThatThrownBy(() -> documentService.upload(CAT_ID, USER_ID, file))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("fail-closed");
+
+        verify(storageService, never()).store(anyString(), any(byte[].class));
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.demo.app.cv.entity;
 
+import com.demo.app.platform.security.encryption.PiiEncryptionConverter;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -33,13 +34,16 @@ public class CvCandidate {
     @Column(nullable = false, length = 300)
     private String fullName;
 
-    @Column(length = 320)
+    @Convert(converter = PiiEncryptionConverter.class)
+    @Column(length = 600)
     private String email;
 
-    @Column(length = 20)
+    @Convert(converter = PiiEncryptionConverter.class)
+    @Column(length = 100)
     private String phone;
 
-    @Column(length = 200)
+    @Convert(converter = PiiEncryptionConverter.class)
+    @Column(length = 400)
     private String city;
 
     @Column(length = 2)

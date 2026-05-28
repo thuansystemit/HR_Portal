@@ -147,7 +147,7 @@ export class AuthService {
       .pipe(catchError(() => EMPTY))
       .subscribe(() => {
         this._user.set(null);
-        sessionStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem(SESSION_KEY);
         this.router.navigate(['/login']);
       });
   }
@@ -177,12 +177,12 @@ export class AuthService {
 
   private persist(user: AuthUser): void {
     this._user.set(user);
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
   }
 
   private restoreSession(): AuthUser | null {
     try {
-      const raw = sessionStorage.getItem(SESSION_KEY);
+      const raw = localStorage.getItem(SESSION_KEY);
       return raw ? (JSON.parse(raw) as AuthUser) : null;
     } catch {
       return null;

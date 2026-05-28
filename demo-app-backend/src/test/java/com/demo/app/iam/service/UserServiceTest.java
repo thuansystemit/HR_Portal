@@ -220,4 +220,29 @@ class UserServiceTest {
         assertThatThrownBy(() -> userService.update(USER_ID, new UpdateUserRequest("Name", ROLE_ID, "active")))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
+
+    @Test
+    void listByRoleName_returnsUsers_whenRoleFound() {
+        var role = Role.builder().id(ROLE_ID).name("Manager").build();
+        var user = User.builder().id(USER_ID).fullName("Alice").email("alice@t.com")
+                .status("active").createdAt(Instant.now()).build();
+
+        when(roleRepository.findByName("Manager")).thenReturn(Optional.of(role));
+        when(userRepository.findActiveByRoleId(ROLE_ID)).thenReturn(List.of(user));
+        when(userRoleRepository.findByUserId(USER_ID)).thenReturn(List.of());
+
+        var result = userService.listByRoleName("Manager");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).fullName()).isEqualTo("Alice");
+    }
+
+    @Test
+    void listByRoleName_returnsEmpty_whenRoleNotFound() {
+        when(roleRepository.findByName("Unknown")).thenReturn(Optional.empty());
+
+        var result = userService.listByRoleName("Unknown");
+
+        assertThat(result).isEmpty();
+    }
 }

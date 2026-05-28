@@ -1,7 +1,7 @@
 # FedRAMP Moderate — Implementation Overview
 > Baseline: NIST SP 800-53 Rev 5 · FedRAMP Moderate (325 controls)
 > System category: Moderate-impact (FIPS 199) — processes candidate PII and employment records
-> Last updated: 2026-05-28
+> Last updated: 2026-05-29
 
 ---
 
@@ -46,7 +46,7 @@
 
 | Control | Status | Remaining Gap | Doc |
 |---------|--------|---------------|-----|
-| AU-2 Audit Events | ⚠️ Partial | `correlationId`/`sessionId` added; recruitment pipeline audit coverage still incomplete | [05_AUDIT](05_AUDIT_SIEM.md) |
+| AU-2 Audit Events | 🔨 **Done** | Full coverage: all IAM, CV, recruitment, hiring pipeline write operations emit audit events | [05_AUDIT](05_AUDIT_SIEM.md) |
 | AU-3 Content of Audit Records | 🔨 **Done** | `correlation_id` (from MDC `requestId`) and `session_id` (JWT `jti`) **added** to all events | [05_AUDIT](05_AUDIT_SIEM.md) |
 | AU-5 Response to Audit Failures | 🔨 **Done** | `@Async` **removed**; `AuditService.log()` is synchronous with `REQUIRES_NEW` — failures propagate | [05_AUDIT](05_AUDIT_SIEM.md) |
 | AU-6 Audit Review & Analysis | ❌ Gap | No SIEM; manual only | [05_AUDIT](05_AUDIT_SIEM.md) |
@@ -74,14 +74,14 @@
 | SC-8 Transmission Integrity | ✅ | TLS 1.3, HSTS, Secure cookies | — |
 | SC-12 Crypto Key Management | ⚠️ **Partial** | JWT key now loads from PKCS12 keystore (persistent, not ephemeral); full KMS migration pending GovCloud | [01_FIPS](01_FIPS_CRYPTO.md) |
 | SC-13 Cryptographic Protection | ⚠️ **Partial** | BC-FIPS provider registered; Azul Zulu JRE (FIPS-capable); PBKDF2 done; KMS for JWT pending | [01_FIPS](01_FIPS_CRYPTO.md) |
-| SC-28 Protection at Rest | ⚠️ Partial | AWS KMS storage encryption; no field-level PII encryption yet | [08_DATA](08_DATA_PROTECTION.md) |
+| SC-28 Protection at Rest | 🔨 **Done** | AES-256-GCM field-level encryption on `cv_candidates` (email, phone, city) via `PiiEncryptionConverter` JPA converter; V28 migration widens columns; ephemeral key for dev, `PII_ENCRYPTION_KEY` env var for prod | [08_DATA](08_DATA_PROTECTION.md) |
 
 ### SI — System and Information Integrity
 
 | Control | Status | Remaining Gap | Doc |
 |---------|--------|---------------|-----|
 | SI-2 Flaw Remediation | 🔨 **Done** | GitHub Actions: OWASP Dependency-Check (SCA), Semgrep (SAST), Trivy (container), npm audit **implemented** | [06_SCANNING](06_SECURITY_SCANNING.md) |
-| SI-3 Malicious Code Protection | ❌ Gap | No malware scan on CV uploads; GuardDuty Malware Protection not configured | [06_SCANNING](06_SECURITY_SCANNING.md) |
+| SI-3 Malicious Code Protection | 🔨 **Done** | Inline ClamAV clamd INSTREAM scan on every upload; `MalwareScanService` abstraction with fail-closed default (FedRAMP SI-3); `NoOpMalwareScanService` for dev; audit event on infected upload | [06_SCANNING](06_SECURITY_SCANNING.md) |
 | SI-4 System Monitoring | ⚠️ Partial | Ops metrics only; no security events / SIEM | [05_AUDIT](05_AUDIT_SIEM.md) |
 | SI-10 Input Validation | ✅ | Jakarta Bean Validation; JPA parameterized | — |
 
@@ -118,7 +118,7 @@
 | P1-1 | JWT key in-memory (SC-12) | ⚠️ In Progress | Keystore-based ✅ · **KMS migration pending GovCloud** | [01_FIPS](01_FIPS_CRYPTO.md) |
 | P1-2 | Audit incomplete + lossy + 1-yr retention | ⚠️ In Progress | Sync+REQUIRES_NEW ✅ · correlationId/sessionId ✅ · **SIEM · WORM · 3-yr retention pending** | [05_AUDIT](05_AUDIT_SIEM.md) |
 | P1-3 | No security scanning in CI (RA-5, SI-2) | ✅ **Done** | SCA · SAST · Trivy · npm audit · ZAP in `security.yml` | [06_SCANNING](06_SECURITY_SCANNING.md) |
-| P1-4 | No malware scan on uploads (SI-3) | ❌ Not Started | GuardDuty Malware Protection or ClamAV Lambda | [06_SCANNING](06_SECURITY_SCANNING.md) |
+| P1-4 | No malware scan on uploads (SI-3) | ✅ **Done** | Inline ClamAV clamd TCP INSTREAM scan + `MalwareScanService` abstraction; fail-closed by default; audit log on block; scan status on `documents.scan_status` | [06_SCANNING](06_SECURITY_SCANNING.md) |
 | P1-5 | Client-side only idle timeout; no session limits | ✅ **Done** | Idle timeout ✅ · denylist ✅ · concurrent session count limit ✅ (Redis Set per user, cap=5, configurable) | [07_SESSION](07_SESSION_HARDENING.md) |
 | P1-6 | No login banner (AC-8) | ✅ **Done** | `/api/v1/auth/banner` endpoint + Angular acknowledgement checkbox | [02_MFA](02_MFA.md) |
 | P1-7 | `ui-avatars.com` PII egress (AC-4) | ✅ **Done** | Replaced with inline SVG avatar using local initials | [08_DATA](08_DATA_PROTECTION.md) |
@@ -134,9 +134,9 @@
 | P2-3 | No Contingency Plan (CP-2,10) | ❌ Not Started | [10_CONMON](10_CONMON.md) |
 | P2-4 | No CM Plan / CIS baselines (CM-1,2) | ❌ Not Started | [10_CONMON](10_CONMON.md) |
 | P2-5 | No personnel termination procedures (PS-4,5) | ❌ Not Started | [10_CONMON](10_CONMON.md) |
-| P2-6 | No field-level encryption on `cv_candidates` PII (SC-28) | ❌ Not Started | [08_DATA](08_DATA_PROTECTION.md) |
-| P2-7 | External LLM processes candidate PII (SA-9) | ❌ Not Started | [08_DATA](08_DATA_PROTECTION.md) |
-| P2-8 | No audit/report export (CA-7) | ❌ Not Started | [05_AUDIT](05_AUDIT_SIEM.md) |
+| P2-6 | No field-level encryption on `cv_candidates` PII (SC-28) | ✅ **Done** | [08_DATA](08_DATA_PROTECTION.md) |
+| P2-7 | External LLM processes candidate PII (SA-9) | ✅ **Done** | [08_DATA](08_DATA_PROTECTION.md) |
+| P2-8 | No audit/report export (CA-7) | ✅ **Done** | [05_AUDIT](05_AUDIT_SIEM.md) |
 
 ---
 
@@ -145,12 +145,16 @@
 | Layer | Done | In Progress | Not Started | Total |
 |-------|:----:|:-----------:|:-----------:|:-----:|
 | P0 — Absolute Blockers | 1 | 1 | 3 | 5 |
-| P1 — Required Before ATO | 7 | 1 | 1 | 9 |
-| P2 — 90-Day Post-ATO | 0 | 0 | 8 | 8 |
-| **All priorities** | **8** | **2** | **12** | **22** |
+| P1 — Required Before ATO | 8 | 1 | 0 | 9 |
+| P2 — 90-Day Post-ATO | 3 | 0 | 5 | 8 |
+| **All priorities** | **12** | **2** | **8** | **22** |
 
 **Controls resolved or materially improved (sprint 1):** AC-8, AC-11, AC-12, AU-3, AU-5, IA-3, IA-5(1), SI-2, P1-6, P1-7, P1-9  
-**Controls resolved or materially improved (sprint 2):** IA-2(1), IA-2(2), AC-10, SC-7 (script CSP)
+**Controls resolved or materially improved (sprint 2):** IA-2(1), IA-2(2), AC-10, SC-7 (script CSP)  
+**Controls resolved or materially improved (sprint 3):** SI-3 (inline ClamAV malware scan, fail-closed, audit on block)
+**Controls resolved or materially improved (sprint 4):** SC-28 (AES-256-GCM field-level PII encryption on cv_candidates), SA-9 (PII tokenisation before LLM — email, phone, LinkedIn, GitHub masked with reversible tokens)
+**Controls resolved or materially improved (sprint 5):** CA-7 (audit CSV export — date-range + action filter, streaming cursor, 366-day cap, PERM_analyticsView gated)
+**Controls resolved or materially improved (sprint 6):** AU-2 (complete recruitment pipeline audit coverage — JobPosting, JobApplication, Interview, HiringRequest, CvShare)
 
 ---
 
@@ -176,7 +180,58 @@
 | CI scanning: SCA + SAST + Trivy + ZAP | `.github/workflows/security.yml`, `owasp-suppressions.xml` | SI-2, RA-5 |
 | TOTP library dependency | `pom.xml` | IA-2 |
 
-### Sprint 2 — 2026-05-28 (this session)
+### Sprint 3 — 2026-05-29
+
+| Item | Files Changed | Controls |
+|------|--------------|---------|
+| `MalwareScanService` interface + `ScanResult` (CLEAN / INFECTED / ERROR) | `MalwareScanService.java` | SI-3 |
+| `ClamdMalwareScanService` — clamd INSTREAM TCP protocol, chunked streaming | `ClamdMalwareScanService.java` | SI-3 |
+| `NoOpMalwareScanService` — always CLEAN, active when `MALWARE_SCAN_ENABLED=false` | `NoOpMalwareScanService.java` | SI-3 |
+| `MalwareDetectedException` + `GlobalExceptionHandler` handler (422) | `MalwareDetectedException.java`, `GlobalExceptionHandler.java` | SI-3 |
+| Inline scan in `DocumentService.upload()` — bytes scanned before DB record created | `DocumentService.java` | SI-3 |
+| Fail-closed default (`app.malware.scan.fail-open=false`) — scan error rejects upload | `application.yml`, `DocumentService.java` | SI-3 |
+| Audit event `DOCUMENT_MALWARE_BLOCKED` on infected file | `DocumentService.java`, `AuditService.java` | AU-2, SI-3 |
+| `scan_status` column on `documents` table | `V27__malware_scan.sql`, `Document.java` | SI-3 |
+| `store(String, byte[])` overload on `StorageService` | `StorageService.java` | SI-3 |
+| Configuration: `clamd-host`, `clamd-port`, `timeout-ms`, `fail-open` | `application.yml` | SI-3 |
+
+### Sprint 6 — 2026-05-29
+
+| Item | Files Changed | Controls |
+|------|--------------|---------|
+| Audit events on `JobPostingService` — `JOB_POSTING_CREATED`, `JOB_POSTING_UPDATED`, `JOB_POSTING_CLOSED`, `JOB_POSTING_SKILLS_UPDATED` | `JobPostingService.java`, `JobPostingController.java` | AU-2 |
+| Audit events on `JobApplicationService` — `APPLICATION_CREATED`, `APPLICATION_BATCH_CREATED`, `APPLICATION_STAGE_MOVED` | `JobApplicationService.java` | AU-2 |
+| Audit events on `InterviewService` — `INTERVIEW_SCHEDULED`, `INTERVIEW_FEEDBACK_SUBMITTED` | `InterviewService.java` | AU-2 |
+| Audit events on `HiringRequestService` — `HIRING_REQUEST_CREATED`, `HIRING_REQUEST_STATUS_UPDATED`, `HIRING_REQUEST_LINKED` | `HiringRequestService.java` | AU-2 |
+| Audit events on `CvShareService` — `CV_SHARED`, `CV_IMPRESSION_SUBMITTED` | `CvShareService.java` | AU-2 |
+| Test fixes: `@Mock AuditService` added to 7 service/controller tests; `actorId` param threaded through `update`/`delete`/`setSkills` | `JobPostingServiceTest.java`, `JobPostingControllerTest.java`, `JobPostingSkillServiceTest.java`, `JobApplicationServiceTest.java`, `InterviewServiceTest.java`, `HiringRequestServiceTest.java`, `CvShareServiceTest.java` | AU-2 |
+
+### Sprint 5 — 2026-05-29
+
+| Item | Files Changed | Controls |
+|------|--------------|---------|
+| `AuditEventRepository` — `streamByDateRange` and `streamByDateRangeAndAction` with cursor fetch-size 500 | `AuditEventRepository.java` | CA-7 |
+| `AuditExportService` — streams CSV rows via JPA cursor; RFC-4180 escaping; 366-day range cap | `AuditExportService.java` | CA-7 |
+| `AuditController` — `GET /api/v1/admin/audit/export?from=&to=&action=`; gated on `PERM_analyticsView`; `Content-Disposition: attachment`, `Cache-Control: no-store` | `AuditController.java` | CA-7 |
+| Flyway V29: `idx_ae_occurred_at` for date-range export queries | `V29__audit_export_index.sql` | CA-7 |
+| 22 unit tests (service + controller) | `AuditExportServiceTest.java`, `AuditControllerTest.java` | CA-7 |
+
+### Sprint 4 — 2026-05-29
+
+| Item | Files Changed | Controls |
+|------|--------------|---------|
+| `AesFieldEncryptionService` — AES-256-GCM, random IV per encryption, `ENC:` prefix, migration-safe passthrough | `AesFieldEncryptionService.java` | SC-28 |
+| `PiiEncryptionConverter` JPA `AttributeConverter` with static holder (avoids Spring/Hibernate bootstrap race) | `PiiEncryptionConverter.java` | SC-28 |
+| `EncryptionConfig` `@PostConstruct` wires converter to service | `EncryptionConfig.java` | SC-28 |
+| `@Convert` on `email`, `phone`, `city` in `CvCandidate` entity | `CvCandidate.java` | SC-28 |
+| Flyway V28: widen PII columns to hold Base64-encoded ciphertext | `V28__pii_field_encryption.sql` | SC-28 |
+| `app.encryption.pii-key` config; ephemeral key with warning for dev | `application.yml` | SC-28 |
+| `PiiTokenizer` — masks email/phone/LinkedIn/GitHub with reversible `__PII_KIND_N__` tokens | `pii_mask.py` | SA-9 |
+| `PiiMaskGuard` — input guardrail, runs before LLM call in both pipeline variants | `pii_mask.py`, `pipeline.py` | SA-9 |
+| `PiiRestoreGuard` — output guardrail, inline token restore + kind-based fallback | `pii_restore.py`, `pipeline.py` | SA-9 |
+| 33 unit tests for tokenizer and both guards | `test_pii_mask.py`, `test_pii_restore.py` | SA-9 |
+
+### Sprint 2 — 2026-05-28
 
 | Item | Files Changed | Controls |
 |------|--------------|---------|
@@ -194,14 +249,15 @@
 
 ## Next Implementation Targets
 
-### Immediate (sprint 3 candidates)
+### Immediate (sprint 4 candidates)
 
 | Item | Effort | Blocks |
 |------|--------|--------|
 | ~~MFA enrollment enforcement hard-block~~ | ~~S~~ | ✅ Done |
 | ~~Concurrent session count limit~~ | ~~S~~ | ✅ Done |
 | ~~CSP nonce (`CspFilter.java`)~~ | ~~M~~ | ✅ Done |
-| GuardDuty Malware Protection for S3 CV uploads | M — 3 days | P1-4 / SI-3 |
+| ~~Inline ClamAV malware scan (SI-3)~~ | ~~M~~ | ✅ Done |
+| Field-level PII encryption on `cv_candidates` (SC-28) | M — 2 days | P2-6 |
 
 ### GovCloud Prerequisites (P0-5 must precede these)
 
@@ -243,7 +299,7 @@ Q4 2026  Wks 14-22  Phase 2: P1 Remediation
                     ├── P1-1: KMS-backed JWT signing (keystore interim ✅ done)
                     ├── P1-2: SIEM + WORM audit archive (sync/correlationId ✅ done)
                     ├── P1-3: CI scanning ✅ DONE
-                    ├── P1-4: Malware scan on uploads
+                    ├── P1-4: Malware scan on uploads ✅ DONE
                     ├── P1-5: Concurrent session limit (idle timeout/denylist ✅ done)
                     ├── P1-6: Login banner ✅ DONE
                     ├── P1-7: ui-avatars.com removed ✅ DONE

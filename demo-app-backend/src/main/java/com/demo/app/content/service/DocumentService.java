@@ -1,5 +1,6 @@
 package com.demo.app.content.service;
 
+import com.demo.app.compliance.service.AuditService;
 import com.demo.app.content.dto.DocumentResponse;
 import com.demo.app.content.dto.DownloadResult;
 import com.demo.app.content.entity.Document;
@@ -9,8 +10,12 @@ import com.demo.app.content.repository.DocumentRepository;
 import com.demo.app.iam.dto.PagedResponse;
 import com.demo.app.iam.repository.UserRepository;
 import com.demo.app.insights.service.ReportService;
+import com.demo.app.platform.exception.MalwareDetectedException;
 import com.demo.app.platform.exception.ResourceNotFoundException;
+import com.demo.app.platform.security.malware.MalwareScanService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -19,11 +24,15 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DocumentService {
 
     private final DocumentRepository documentRepository;
@@ -31,6 +40,11 @@ public class DocumentService {
     private final StorageService storageService;
     private final ReportService reportService;
     private final UserRepository userRepository;
+    private final MalwareScanService malwareScanService;
+    private final AuditService auditService;
+
+    @Value("${app.malware.scan.fail-open:false}")
+    private boolean failOpen;
 
     @Transactional(readOnly = true)
     public PagedResponse<DocumentResponse> list(UUID categoryId, int page, int size) {
@@ -49,6 +63,15 @@ public class DocumentService {
         String filename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "file";
         String mimeType = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
 
+        // SI-3: Scan file bytes before accepting the upload
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to read upload bytes", e);
+        }
+        String scanStatus = runMalwareScan(bytes, filename, categoryId, uploadedBy);
+
         var doc = Document.builder()
                 .categoryId(categoryId)
                 .name(filename)
@@ -57,6 +80,7 @@ public class DocumentService {
                 .sizeBytes(file.getSize())
                 .uploadedBy(uploadedBy)
                 .uploadStatus("committed")
+                .scanStatus(scanStatus)
                 .build();
 
         if (category.getDocumentType() == DocumentType.CV) {
@@ -71,13 +95,39 @@ public class DocumentService {
         doc.setStorageKey(key);
         doc = documentRepository.save(doc);
 
-        storageService.store(key, file);
+        storageService.store(key, bytes);
 
         category.setDocumentCount(category.getDocumentCount() + 1);
         categoryRepository.save(category);
 
         scheduleViewRefresh();
         return toResponse(doc);
+    }
+
+    /**
+     * Runs malware scan and returns the scan status string to record on the Document.
+     * Throws MalwareDetectedException if infected.
+     * Throws IllegalStateException if scan error and fail-open=false (FedRAMP default).
+     */
+    private String runMalwareScan(byte[] bytes, String filename, UUID categoryId, UUID uploadedBy) {
+        var result = malwareScanService.scan(bytes, filename);
+        return switch (result.status()) {
+            case CLEAN -> "CLEAN";
+            case INFECTED -> {
+                auditService.log(uploadedBy, "DOCUMENT_MALWARE_BLOCKED", "DocumentCategory", categoryId,
+                        null, Map.of("filename", filename, "threat", String.valueOf(result.detail())), "blocked");
+                throw new MalwareDetectedException(result.detail() != null ? result.detail() : "unknown threat");
+            }
+            case ERROR -> {
+                log.error("Malware scan error for '{}': {}", filename, result.detail());
+                if (!failOpen) {
+                    throw new IllegalStateException(
+                            "Malware scan unavailable — upload rejected (fail-closed). " + result.detail());
+                }
+                log.warn("Malware scan fail-open: proceeding with unscanned file '{}'", filename);
+                yield "SCAN_ERROR";
+            }
+        };
     }
 
     @Transactional(readOnly = true)
@@ -140,6 +190,6 @@ public class DocumentService {
                 .orElse("Unknown");
         return new DocumentResponse(d.getId(), d.getCategoryId(), d.getName(),
                 d.getMimeType(), d.getSizeBytes(), d.getUploadedBy(), uploadedByName,
-                d.getUploadedAt(), d.getExtractionStatus());
+                d.getUploadedAt(), d.getExtractionStatus(), d.getScanStatus());
     }
 }

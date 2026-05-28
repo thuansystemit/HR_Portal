@@ -1,5 +1,6 @@
 package com.demo.app.recruitment;
 
+import com.demo.app.compliance.service.AuditService;
 import com.demo.app.platform.exception.ResourceNotFoundException;
 import com.demo.app.recruitment.dto.JobPostingSkillDto;
 import com.demo.app.recruitment.entity.JobPosting;
@@ -29,6 +30,7 @@ class JobPostingSkillServiceTest {
     @Mock JobPostingRepository jobPostingRepository;
     @Mock JobApplicationRepository jobApplicationRepository;
     @Mock JobPostingSkillRepository jobPostingSkillRepository;
+    @Mock AuditService auditService;
 
     @InjectMocks
     JobPostingService jobPostingService;
@@ -96,7 +98,7 @@ class JobPostingSkillServiceTest {
         when(jobPostingRepository.findById(POSTING_ID)).thenReturn(Optional.of(posting));
         when(jobPostingSkillRepository.saveAll(any())).thenReturn(savedEntities);
 
-        List<JobPostingSkillDto> result = jobPostingService.setSkills(POSTING_ID, newSkills);
+        List<JobPostingSkillDto> result = jobPostingService.setSkills(POSTING_ID, newSkills, USER_ID);
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).skillName()).isEqualTo("Kotlin");
@@ -111,7 +113,7 @@ class JobPostingSkillServiceTest {
         when(jobPostingRepository.findById(POSTING_ID)).thenReturn(Optional.of(buildPosting()));
         when(jobPostingSkillRepository.saveAll(any())).thenReturn(List.of());
 
-        List<JobPostingSkillDto> result = jobPostingService.setSkills(POSTING_ID, List.of());
+        List<JobPostingSkillDto> result = jobPostingService.setSkills(POSTING_ID, List.of(), USER_ID);
 
         assertThat(result).isEmpty();
         verify(jobPostingSkillRepository).deleteByJobPostingId(POSTING_ID);
@@ -123,7 +125,7 @@ class JobPostingSkillServiceTest {
         when(jobPostingRepository.findById(POSTING_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> jobPostingService.setSkills(POSTING_ID,
-                List.of(new JobPostingSkillDto("Java", true))))
+                List.of(new JobPostingSkillDto("Java", true)), USER_ID))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining(POSTING_ID.toString());
 

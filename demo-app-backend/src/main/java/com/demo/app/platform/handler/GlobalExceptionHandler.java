@@ -2,6 +2,7 @@ package com.demo.app.platform.handler;
 
 import com.demo.app.platform.dto.ErrorResponse;
 import com.demo.app.platform.exception.*;
+import com.demo.app.platform.exception.MalwareDetectedException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -35,6 +36,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleBuiltIn(BuiltInRoleException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.of("BUILT_IN_ROLE", ex.getMessage()));
+    }
+
+    @ExceptionHandler(MalwareDetectedException.class)
+    public ResponseEntity<ErrorResponse> handleMalwareDetected(MalwareDetectedException ex) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of("MALWARE_DETECTED", ex.getMessage()));
     }
 
     @ExceptionHandler(WrongPasswordException.class)

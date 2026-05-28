@@ -13,11 +13,13 @@ from app.guardrails.input.file_size import FileSizeGuard
 from app.guardrails.input.injection import InjectionGuard
 from app.guardrails.input.liteparse_extractor import LiteParseTextExtractor
 from app.guardrails.input.mime_type import MimeTypeGuard
+from app.guardrails.input.pii_mask import PiiMaskGuard
 from app.guardrails.input.text_extractor import TextExtractor
 from app.guardrails.input.text_length import TextLengthGuard
 from app.guardrails.input.text_quality import TextQualityGuard
 from app.guardrails.output.confidence import ConfidenceGuard
 from app.guardrails.output.json_parse import JsonParseGuard
+from app.guardrails.output.pii_restore import PiiRestoreGuard
 from app.guardrails.output.sanitize import SanitizeGuard
 from app.guardrails.output.schema import SchemaGuard
 from app.guardrails.output.semantic import SemanticGuard
@@ -47,6 +49,7 @@ _INPUT_PIPELINE = GuardrailPipeline([
     TextExtractor(),
     TextLengthGuard(),
     TextQualityGuard(),
+    PiiMaskGuard(),   # SA-9: tokenise PII before LLM sees the text
     InjectionGuard(),
 ])
 
@@ -56,6 +59,7 @@ _INPUT_PIPELINE_LITE = GuardrailPipeline([
     LiteParseTextExtractor(),
     TextLengthGuard(),
     TextQualityGuard(),
+    PiiMaskGuard(),   # SA-9: tokenise PII before LLM sees the text
     InjectionGuard(),
 ])
 
@@ -64,6 +68,7 @@ _OUTPUT_PIPELINE = GuardrailPipeline([
     SchemaGuard(),
     SemanticGuard(),
     ConfidenceGuard(),
+    PiiRestoreGuard(),  # SA-9: restore PII tokens after LLM extraction
     SanitizeGuard(),
 ])
 

@@ -20,6 +20,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -152,5 +153,20 @@ class UserControllerTest {
 
         verify(userService).delete(USER_ID);
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void list_withRoleName_delegatesToListByRoleName() {
+        var userResponse = buildUserResponse();
+        when(userService.listByRoleName("Admin")).thenReturn(List.of(userResponse));
+
+        var result = userController.list(0, 10, "Admin");
+
+        assertThat(result.getStatusCode().value()).isEqualTo(200);
+        @SuppressWarnings("unchecked")
+        var body = (List<UserResponse>) result.getBody();
+        assertThat(body).hasSize(1);
+        verify(userService).listByRoleName("Admin");
+        verify(userService, never()).list(anyInt(), anyInt());
     }
 }

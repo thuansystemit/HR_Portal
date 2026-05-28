@@ -1,5 +1,6 @@
 package com.demo.app.recruitment.service;
 
+import com.demo.app.compliance.service.AuditService;
 import com.demo.app.cv.repository.CvCandidateRepository;
 import com.demo.app.cv.repository.CvTechnicalSkillRepository;
 import com.demo.app.platform.exception.ConflictException;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +34,7 @@ public class JobApplicationService {
     private final CandidateHiringStatusService hiringStatusService;
     private final JobPostingSkillRepository jobPostingSkillRepository;
     private final CvTechnicalSkillRepository cvTechnicalSkillRepository;
+    private final AuditService auditService;
 
     public ApplicationResponse apply(UUID jobPostingId, CreateApplicationRequest req, UUID moverId) {
         var posting = jobPostingRepository.findById(jobPostingId)
@@ -62,6 +65,8 @@ public class JobApplicationService {
                 .build());
 
         hiringStatusService.recalculate(req.cvCandidateId());
+        auditService.log(moverId, "APPLICATION_CREATED", "JobApplication", saved.getId(),
+                null, Map.of("jobPostingId", jobPostingId.toString(), "stage", "APPLIED"), "success");
         return toResponse(saved);
     }
 
@@ -125,6 +130,8 @@ public class JobApplicationService {
                 applied.add(toResponse(saved));
             }
         }
+        auditService.log(moverId, "APPLICATION_BATCH_CREATED", "JobPosting", jobPostingId,
+                null, Map.of("applied", applied.size(), "skipped", skipped.size()), "success");
         return new BatchApplyResult(applied, skipped);
     }
 
@@ -153,6 +160,8 @@ public class JobApplicationService {
                 .build());
 
         hiringStatusService.recalculate(application.getCvCandidateId());
+        auditService.log(moverId, "APPLICATION_STAGE_MOVED", "JobApplication", appId,
+                Map.of("stage", fromStage), Map.of("stage", req.stage()), "success");
         return toResponse(saved);
     }
 

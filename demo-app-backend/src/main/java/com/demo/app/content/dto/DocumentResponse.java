@@ -12,5 +12,6 @@ public record DocumentResponse(
         UUID uploadedBy,
         String uploadedByName,
         Instant uploadedAt,
-        String extractionStatus
+        String extractionStatus,
+        String scanStatus
 ) {}

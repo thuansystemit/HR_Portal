@@ -1,5 +1,6 @@
 package com.demo.app.recruitment;
 
+import com.demo.app.compliance.service.AuditService;
 import com.demo.app.platform.exception.ResourceNotFoundException;
 import com.demo.app.recruitment.dto.*;
 import com.demo.app.recruitment.entity.JobPosting;
@@ -30,6 +31,7 @@ class JobPostingServiceTest {
 
     @Mock JobPostingRepository jobPostingRepository;
     @Mock JobApplicationRepository jobApplicationRepository;
+    @Mock AuditService auditService;
 
     @InjectMocks
     JobPostingService jobPostingService;
@@ -149,7 +151,7 @@ class JobPostingServiceTest {
         when(jobPostingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(jobApplicationRepository.countByJobPostingId(POSTING_ID)).thenReturn(0);
 
-        var result = jobPostingService.update(POSTING_ID, req);
+        var result = jobPostingService.update(POSTING_ID, req, USER_ID);
 
         assertThat(posting.getTitle()).isEqualTo("Updated Title");
         assertThat(posting.getStatus()).isEqualTo("OPEN");
@@ -166,7 +168,7 @@ class JobPostingServiceTest {
         when(jobPostingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(jobApplicationRepository.countByJobPostingId(POSTING_ID)).thenReturn(0);
 
-        jobPostingService.update(POSTING_ID, req);
+        jobPostingService.update(POSTING_ID, req, USER_ID);
 
         assertThat(posting.getDepartment()).isEqualTo("HR");
         assertThat(posting.getLocation()).isEqualTo("NYC");
@@ -180,7 +182,7 @@ class JobPostingServiceTest {
         when(jobPostingRepository.findById(POSTING_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> jobPostingService.update(POSTING_ID,
-                new UpdateJobPostingRequest("X", null, null, null, null, null, null)))
+                new UpdateJobPostingRequest("X", null, null, null, null, null, null), USER_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -192,7 +194,7 @@ class JobPostingServiceTest {
         when(jobPostingRepository.findById(POSTING_ID)).thenReturn(Optional.of(posting));
         when(jobPostingRepository.save(any())).thenReturn(posting);
 
-        jobPostingService.delete(POSTING_ID);
+        jobPostingService.delete(POSTING_ID, USER_ID);
 
         assertThat(posting.getStatus()).isEqualTo("CLOSED");
         verify(jobPostingRepository).save(posting);
@@ -202,7 +204,7 @@ class JobPostingServiceTest {
     void delete_throws_whenNotFound() {
         when(jobPostingRepository.findById(POSTING_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> jobPostingService.delete(POSTING_ID))
+        assertThatThrownBy(() -> jobPostingService.delete(POSTING_ID, USER_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 

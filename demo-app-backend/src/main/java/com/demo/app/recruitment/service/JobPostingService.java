@@ -1,5 +1,6 @@
 package com.demo.app.recruitment.service;
 
+import com.demo.app.compliance.service.AuditService;
 import com.demo.app.platform.exception.ResourceNotFoundException;
 import com.demo.app.recruitment.dto.*;
 import com.demo.app.recruitment.entity.JobPosting;
@@ -13,6 +14,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -24,6 +27,7 @@ public class JobPostingService {
     private final JobPostingRepository jobPostingRepository;
     private final JobApplicationRepository jobApplicationRepository;
     private final JobPostingSkillRepository jobPostingSkillRepository;
+    private final AuditService auditService;
 
     public JobPostingResponse create(CreateJobPostingRequest req, UUID createdBy) {
         var posting = JobPosting.builder()
@@ -37,6 +41,8 @@ public class JobPostingService {
                 .createdBy(createdBy)
                 .build();
         var saved = jobPostingRepository.save(posting);
+        auditService.log(createdBy, "JOB_POSTING_CREATED", "JobPosting", saved.getId(),
+                null, Map.of("status", saved.getStatus()), "success");
         return toResponse(saved, 0);
     }
 
@@ -56,9 +62,10 @@ public class JobPostingService {
         return toResponse(posting, count);
     }
 
-    public JobPostingResponse update(UUID id, UpdateJobPostingRequest req) {
+    public JobPostingResponse update(UUID id, UpdateJobPostingRequest req, UUID actorId) {
         var posting = jobPostingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("JobPosting", id));
+        var oldStatus = posting.getStatus();
         if (req.title() != null)        posting.setTitle(req.title());
         if (req.department() != null)   posting.setDepartment(req.department());
         if (req.location() != null)     posting.setLocation(req.location());
@@ -67,15 +74,19 @@ public class JobPostingService {
         if (req.deadline() != null)     posting.setDeadline(req.deadline());
         if (req.status() != null)       posting.setStatus(req.status());
         var saved = jobPostingRepository.save(posting);
+        auditService.log(actorId, "JOB_POSTING_UPDATED", "JobPosting", id,
+                Map.of("status", oldStatus), Map.of("status", saved.getStatus()), "success");
         int count = jobApplicationRepository.countByJobPostingId(id);
         return toResponse(saved, count);
     }
 
-    public void delete(UUID id) {
+    public void delete(UUID id, UUID actorId) {
         var posting = jobPostingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("JobPosting", id));
         posting.setStatus("CLOSED");
         jobPostingRepository.save(posting);
+        auditService.log(actorId, "JOB_POSTING_CLOSED", "JobPosting", id,
+                Map.of("status", "OPEN"), Map.of("status", "CLOSED"), "success");
     }
 
     private JobPostingResponse toResponse(JobPosting p, int applicationCount) {
@@ -101,7 +112,7 @@ public class JobPostingService {
                 .toList();
     }
 
-    public List<JobPostingSkillDto> setSkills(UUID jobPostingId, List<JobPostingSkillDto> skills) {
+    public List<JobPostingSkillDto> setSkills(UUID jobPostingId, List<JobPostingSkillDto> skills, UUID actorId) {
         jobPostingRepository.findById(jobPostingId)
                 .orElseThrow(() -> new ResourceNotFoundException("JobPosting", jobPostingId));
         jobPostingSkillRepository.deleteByJobPostingId(jobPostingId);
@@ -112,9 +123,12 @@ public class JobPostingService {
                         .isRequired(dto.isRequired())
                         .build())
                 .toList();
-        return jobPostingSkillRepository.saveAll(entities)
+        var saved = jobPostingSkillRepository.saveAll(entities)
                 .stream()
                 .map(s -> new JobPostingSkillDto(s.getSkillName(), s.isRequired()))
                 .toList();
+        auditService.log(actorId, "JOB_POSTING_SKILLS_UPDATED", "JobPosting", jobPostingId,
+                null, Map.of("skillCount", skills.size()), "success");
+        return saved;
     }
 }

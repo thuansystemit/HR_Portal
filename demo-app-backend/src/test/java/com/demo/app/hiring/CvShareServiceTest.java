@@ -1,5 +1,6 @@
 package com.demo.app.hiring;
 
+import com.demo.app.compliance.service.AuditService;
 import com.demo.app.cv.entity.CvCandidate;
 import com.demo.app.cv.repository.CvCandidateRepository;
 import com.demo.app.hiring.dto.CvShareResponse;
@@ -36,6 +37,7 @@ class CvShareServiceTest {
     @Mock HiringRequestRepository hiringRequestRepository;
     @Mock CvCandidateRepository cvCandidateRepository;
     @Mock UserRepository userRepository;
+    @Mock AuditService auditService;
 
     @InjectMocks
     CvShareService cvShareService;

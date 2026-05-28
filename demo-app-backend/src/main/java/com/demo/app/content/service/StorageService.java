@@ -28,6 +28,16 @@ public class StorageService {
         }
     }
 
+    public void store(String relativePath, byte[] bytes) {
+        try {
+            Path target = uploadRoot.resolve(relativePath);
+            Files.createDirectories(target.getParent());
+            Files.write(target, bytes);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to store file: " + relativePath, e);
+        }
+    }
+
     public Resource load(String relativePath) {
         return new FileSystemResource(uploadRoot.resolve(relativePath));
     }

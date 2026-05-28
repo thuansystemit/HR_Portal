@@ -46,13 +46,15 @@ public class JobPostingController {
     @PutMapping("/{id}")
     public ResponseEntity<JobPostingResponse> update(
             @PathVariable UUID id,
-            @RequestBody UpdateJobPostingRequest request) {
-        return ResponseEntity.ok(jobPostingService.update(id, request));
+            @RequestBody UpdateJobPostingRequest request,
+            Authentication authentication) {
+        var actorId = UUID.fromString(authentication.getName());
+        return ResponseEntity.ok(jobPostingService.update(id, request, actorId));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable UUID id) {
-        jobPostingService.delete(id);
+    public ResponseEntity<Void> delete(@PathVariable UUID id, Authentication authentication) {
+        jobPostingService.delete(id, UUID.fromString(authentication.getName()));
         return ResponseEntity.noContent().build();
     }
 
@@ -64,7 +66,9 @@ public class JobPostingController {
     @PutMapping("/{id}/skills")
     public ResponseEntity<List<JobPostingSkillDto>> setSkills(
             @PathVariable UUID id,
-            @RequestBody List<JobPostingSkillDto> skills) {
-        return ResponseEntity.ok(jobPostingService.setSkills(id, skills));
+            @RequestBody List<JobPostingSkillDto> skills,
+            Authentication authentication) {
+        var actorId = UUID.fromString(authentication.getName());
+        return ResponseEntity.ok(jobPostingService.setSkills(id, skills, actorId));
     }
 }

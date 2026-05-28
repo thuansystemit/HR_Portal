@@ -32,7 +32,7 @@ class RedisIdempotencyServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+        lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
         service = new RedisIdempotencyService(stringRedisTemplate, objectMapper);
     }
 
@@ -77,6 +77,20 @@ class RedisIdempotencyServiceTest {
 
         String expectedJson = objectMapper.writeValueAsString(response);
         verify(valueOperations).set(EXPECTED_REDIS_KEY, expectedJson, Duration.ofHours(24));
+    }
+
+    @Test
+    void store_silentlyIgnores_whenSerializationFails() throws Exception {
+        var mockMapper = mock(com.fasterxml.jackson.databind.ObjectMapper.class);
+        doThrow(new com.fasterxml.jackson.core.JsonProcessingException("forced") {})
+                .when(mockMapper).writeValueAsString(any());
+        var localService = new RedisIdempotencyService(stringRedisTemplate, mockMapper);
+
+        // Should not throw — fail-open on write errors
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(
+                () -> localService.store(USER_ID, "category", IDEM_KEY, "anything")))
+                .isNull();
+        verify(valueOperations, never()).set(any(), any(), any(Duration.class));
     }
 
     // minimal DTO for testing serialization round-trips

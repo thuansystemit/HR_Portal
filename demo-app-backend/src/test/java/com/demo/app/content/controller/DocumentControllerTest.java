@@ -45,7 +45,7 @@ class DocumentControllerTest {
 
     private DocumentResponse buildDocumentResponse() {
         return new DocumentResponse(DOC_ID, CAT_ID, "file.pdf", "application/pdf",
-                1024L, USER_ID, "Test User", Instant.now(), null);
+                1024L, USER_ID, "Test User", Instant.now(), null, "CLEAN");
     }
 
     @Test

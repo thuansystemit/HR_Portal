@@ -1,5 +1,6 @@
 package com.demo.app.hiring.service;
 
+import com.demo.app.compliance.service.AuditService;
 import com.demo.app.hiring.dto.CreateHiringRequestRequest;
 import com.demo.app.hiring.dto.HiringRequestResponse;
 import com.demo.app.hiring.dto.UpdateHiringRequestStatusRequest;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -33,6 +35,7 @@ public class HiringRequestService {
     private final JobPostingRepository    jobPostingRepository;
     private final NotificationService     notificationService;
     private final RoleRepository          roleRepository;
+    private final AuditService            auditService;
 
     public HiringRequestResponse create(CreateHiringRequestRequest req, UUID requesterId) {
         validateRoleType(req.roleType());
@@ -49,6 +52,8 @@ public class HiringRequestService {
                 .build();
         HiringRequestResponse saved = toResponse(hiringRequestRepository.save(entity));
         notifyHrAboutNewRequest(saved);
+        auditService.log(requesterId, "HIRING_REQUEST_CREATED", "HiringRequest", saved.id(),
+                null, Map.of("urgency", saved.urgency(), "roleType", saved.roleType()), "success");
         return saved;
     }
 
@@ -86,11 +91,15 @@ public class HiringRequestService {
 
         HiringRequest entity = hiringRequestRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("HiringRequest", id));
+        var oldStatus = entity.getStatus();
         entity.setStatus(req.status());
         if (req.jobPostingId() != null) {
             entity.setJobPostingId(req.jobPostingId());
         }
-        return toResponse(hiringRequestRepository.save(entity));
+        var result = toResponse(hiringRequestRepository.save(entity));
+        auditService.log(updatedBy, "HIRING_REQUEST_STATUS_UPDATED", "HiringRequest", id,
+                Map.of("status", oldStatus), Map.of("status", req.status()), "success");
+        return result;
     }
 
     @Transactional(readOnly = true)
@@ -112,8 +121,10 @@ public class HiringRequestService {
         if ("PENDING".equals(request.getStatus())) {
             request.setStatus("IN_PROGRESS");
         }
-
-        return toResponse(hiringRequestRepository.save(request));
+        var result = toResponse(hiringRequestRepository.save(request));
+        auditService.log(updatedBy, "HIRING_REQUEST_LINKED", "HiringRequest", requestId,
+                null, Map.of("jobPostingId", jobPostingId.toString()), "success");
+        return result;
     }
 
     private HiringRequestResponse toResponse(HiringRequest entity) {

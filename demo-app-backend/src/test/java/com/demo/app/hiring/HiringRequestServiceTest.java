@@ -5,6 +5,7 @@ import com.demo.app.hiring.dto.HiringRequestResponse;
 import com.demo.app.hiring.dto.UpdateHiringRequestStatusRequest;
 import com.demo.app.hiring.entity.HiringRequest;
 import com.demo.app.hiring.repository.HiringRequestRepository;
+import com.demo.app.compliance.service.AuditService;
 import com.demo.app.hiring.service.HiringRequestService;
 import com.demo.app.iam.entity.Role;
 import com.demo.app.iam.entity.User;
@@ -36,6 +37,7 @@ class HiringRequestServiceTest {
     @Mock JobPostingRepository    jobPostingRepository;
     @Mock NotificationService     notificationService;
     @Mock RoleRepository          roleRepository;
+    @Mock AuditService            auditService;
 
     @InjectMocks
     HiringRequestService hiringRequestService;

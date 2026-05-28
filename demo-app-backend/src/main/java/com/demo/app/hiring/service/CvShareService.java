@@ -1,5 +1,6 @@
 package com.demo.app.hiring.service;
 
+import com.demo.app.compliance.service.AuditService;
 import com.demo.app.cv.repository.CvCandidateRepository;
 import com.demo.app.hiring.dto.CvShareResponse;
 import com.demo.app.hiring.dto.ShareCvRequest;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -31,6 +33,7 @@ public class CvShareService {
     private final HiringRequestRepository hiringRequestRepository;
     private final CvCandidateRepository cvCandidateRepository;
     private final UserRepository userRepository;
+    private final AuditService auditService;
 
     public CvShareResponse share(UUID hiringRequestId, ShareCvRequest req, UUID sharedByUserId) {
         hiringRequestRepository.findById(hiringRequestId)
@@ -49,7 +52,10 @@ public class CvShareService {
                 .sharedWith(req.sharedWith())
                 .comment(req.comment())
                 .build();
-        return toResponse(cvShareRepository.save(entity));
+        var saved = toResponse(cvShareRepository.save(entity));
+        auditService.log(sharedByUserId, "CV_SHARED", "CvShare", saved.id(),
+                null, Map.of("sharedWith", req.sharedWith().toString()), "success");
+        return saved;
     }
 
     public CvShareResponse submitImpression(UUID shareId, SubmitImpressionRequest req, UUID reviewerId) {

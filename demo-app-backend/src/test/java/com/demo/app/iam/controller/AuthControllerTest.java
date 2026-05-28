@@ -41,6 +41,15 @@ class AuthControllerTest {
     private final UUID USER_ID = UUID.randomUUID();
 
     @Test
+    void banner_returnsSystemUseNotification() {
+        var result = authController.banner();
+
+        assertThat(result.getStatusCode().value()).isEqualTo(200);
+        assertThat(result.getBody()).containsKey("message");
+        assertThat(result.getBody().get("message")).contains("U.S. Government");
+    }
+
+    @Test
     void login_delegatesToService_returnsOk() {
         var request = new LoginRequest("a@b.com", "pass");
         var userInfo = new UserInfo(USER_ID, "Test User", "a@b.com", null, null, Set.of());

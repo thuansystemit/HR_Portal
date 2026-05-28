@@ -77,4 +77,36 @@ class StorageServiceTest {
         assertThatCode(() -> storageService.delete("nonexistent.txt"))
                 .doesNotThrowAnyException();
     }
+
+    @Test
+    void storeBytes_writesFileToDisk() throws IOException {
+        byte[] content = "byte content".getBytes();
+
+        storageService.store("bytes/test.bin", content);
+
+        Path target = tempDir.resolve("bytes/test.bin");
+        assertThat(target).exists();
+        assertThat(Files.readAllBytes(target)).isEqualTo(content);
+    }
+
+    @Test
+    void storeBytes_createsParentDirectories() throws IOException {
+        byte[] content = "data".getBytes();
+
+        storageService.store("a/b/c/deep.bin", content);
+
+        assertThat(tempDir.resolve("a/b/c/deep.bin")).exists();
+        assertThat(tempDir.resolve("a/b/c")).isDirectory();
+    }
+
+    @Test
+    void storeBytes_throwsUncheckedIOException_whenPathIsInvalid() throws IOException {
+        // Write a file where we then try to use as a directory
+        Path blocker = tempDir.resolve("blocker");
+        Files.writeString(blocker, "occupied");
+
+        // Try to store inside a file-as-directory — createDirectories will fail
+        assertThatCode(() -> storageService.store("blocker/child.bin", new byte[]{1}))
+                .isInstanceOf(java.io.UncheckedIOException.class);
+    }
 }

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from app.domain.cv_schema import CvExtraction
 
@@ -28,6 +28,7 @@ class PipelineContext:
     raw_dict: dict | None = None
     cv_data: CvExtraction | None = None
     reports: list[GuardrailReport] = field(default_factory=list)
+    pii_tokenizer: Any = None  # set by PiiMaskGuard, consumed by PiiRestoreGuard
 
 
 @runtime_checkable

@@ -1,6 +1,9 @@
 package com.demo.app.platform.handler;
 
 import com.demo.app.platform.exception.*;
+import com.demo.app.platform.exception.MalwareDetectedException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.http.HttpMethod;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -173,5 +176,26 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().getCode()).isEqualTo("BAD_REQUEST");
         assertThat(response.getBody().getMessage()).contains("Invalid stage");
+    }
+
+    @Test
+    void handleMalwareDetected_returns422() {
+        var ex = new MalwareDetectedException("Eicar-Signature");
+
+        var response = handler.handleMalwareDetected(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getBody().getCode()).isEqualTo("MALWARE_DETECTED");
+        assertThat(response.getBody().getMessage()).contains("Eicar-Signature");
+    }
+
+    @Test
+    void handleNoResourceFound_returns404() throws Exception {
+        var ex = new NoResourceFoundException(HttpMethod.GET, "/unknown/path");
+
+        var response = handler.handleNoResourceFound(ex);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody().getCode()).isEqualTo("NOT_FOUND");
     }
 }

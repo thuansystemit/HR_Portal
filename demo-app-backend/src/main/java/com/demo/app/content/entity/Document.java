@@ -47,4 +47,7 @@ public class Document {
 
     @Column(columnDefinition = "TEXT")
     private String extractionError;
+
+    @Column(length = 20)
+    private String scanStatus;
 }

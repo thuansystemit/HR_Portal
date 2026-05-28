@@ -1,5 +1,6 @@
 package com.demo.app.recruitment.service;
 
+import com.demo.app.compliance.service.AuditService;
 import com.demo.app.iam.repository.RoleRepository;
 import com.demo.app.iam.repository.UserRepository;
 import com.demo.app.platform.exception.ConflictException;
@@ -18,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -39,6 +41,7 @@ public class InterviewService {
     private final NotificationService notificationService;
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
+    private final AuditService auditService;
 
     public InterviewResponse schedule(UUID appId, ScheduleInterviewRequest req, UUID createdBy) {
         if (!jobApplicationRepository.existsById(appId)) {
@@ -68,6 +71,8 @@ public class InterviewService {
             );
         }
 
+        auditService.log(createdBy, "INTERVIEW_SCHEDULED", "Interview", saved.getId(),
+                null, Map.of("applicationId", appId.toString()), "success");
         return toResponse(saved, List.of());
     }
 
@@ -102,7 +107,8 @@ public class InterviewService {
         var saved = feedbackRepository.save(feedback);
 
         notifyHrAboutFeedback(interviewId, reviewerId, req.recommendation());
-
+        auditService.log(reviewerId, "INTERVIEW_FEEDBACK_SUBMITTED", "InterviewFeedback", saved.getId(),
+                null, Map.of("recommendation", req.recommendation()), "success");
         return toFeedbackResponse(saved);
     }
 

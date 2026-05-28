@@ -30,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -294,6 +295,85 @@ class CvCandidateServiceTest {
         assertThat(results.get(0).id()).isEqualTo(CANDIDATE_ID);
         assertThat(results.get(0).fullName()).isEqualTo("John Doe");
         assertThat(results.get(0).email()).isEqualTo("john@example.com");
+    }
+
+    @Test
+    void ingest_returnsNull_whenStatusRejected() {
+        ReflectionTestUtils.setField(cvCandidateService, "outputDir", "/tmp/test-output");
+        var request = new IngestCvRequest(DOC_ID, CAT_ID, null, "REJECTED", List.of("file too large"));
+
+        var result = cvCandidateService.ingest(request);
+
+        assertThat(result).isNull();
+        verify(documentService).updateExtractionStatus(eq(DOC_ID), eq("FAILED"),
+                eq("REJECTED"), contains("file too large"));
+        verify(candidateRepository, never()).existsByDocumentId(any());
+    }
+
+    @Test
+    void ingest_returnsNull_whenStatusError() {
+        ReflectionTestUtils.setField(cvCandidateService, "outputDir", "/tmp/test-output");
+        var request = new IngestCvRequest(DOC_ID, CAT_ID, null, "ERROR", null);
+
+        var result = cvCandidateService.ingest(request);
+
+        assertThat(result).isNull();
+        verify(documentService).updateExtractionStatus(eq(DOC_ID), eq("FAILED"),
+                eq("ERROR"), anyString());
+    }
+
+    @Test
+    void ingest_throws_whenJsonFileIsBlank() {
+        ReflectionTestUtils.setField(cvCandidateService, "outputDir", "/tmp/test-output");
+        var request = new IngestCvRequest(DOC_ID, CAT_ID, "   ", null, null);
+
+        assertThatThrownBy(() -> cvCandidateService.ingest(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("jsonFile is required");
+        verify(documentService).updateExtractionStatus(eq(DOC_ID), eq("FAILED"),
+                eq("INGEST"), anyString());
+    }
+
+    @Test
+    void updateHiringStatus_updatesStatus_whenValid() {
+        var candidate = buildCandidate();
+        when(candidateRepository.findById(CANDIDATE_ID)).thenReturn(Optional.of(candidate));
+        when(candidateRepository.save(any())).thenAnswer(i -> {
+            CvCandidate c = i.getArgument(0);
+            c.setId(CANDIDATE_ID);
+            return c;
+        });
+        when(workExperienceRepository.findByCvCandidateIdOrderBySortOrder(CANDIDATE_ID)).thenReturn(List.of());
+        when(educationRepository.findByCvCandidateIdOrderBySortOrder(CANDIDATE_ID)).thenReturn(List.of());
+        when(technicalSkillRepository.findByCvCandidateId(CANDIDATE_ID)).thenReturn(List.of());
+        when(languageRepository.findByCvCandidateId(CANDIDATE_ID)).thenReturn(List.of());
+        when(certificationRepository.findByCvCandidateId(CANDIDATE_ID)).thenReturn(List.of());
+
+        var request = new com.demo.app.cv.dto.UpdateHiringStatusRequest("HIRED");
+        var result = cvCandidateService.updateHiringStatus(CANDIDATE_ID, request);
+
+        assertThat(result.id()).isEqualTo(CANDIDATE_ID);
+        verify(candidateRepository).save(any());
+    }
+
+    @Test
+    void updateHiringStatus_throws_whenStatusInvalid() {
+        var candidate = buildCandidate();
+        when(candidateRepository.findById(CANDIDATE_ID)).thenReturn(Optional.of(candidate));
+
+        var request = new com.demo.app.cv.dto.UpdateHiringStatusRequest("INVALID_STATUS");
+        assertThatThrownBy(() -> cvCandidateService.updateHiringStatus(CANDIDATE_ID, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid hiring status");
+    }
+
+    @Test
+    void updateHiringStatus_throws_whenCandidateNotFound() {
+        when(candidateRepository.findById(CANDIDATE_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> cvCandidateService.updateHiringStatus(CANDIDATE_ID,
+                new com.demo.app.cv.dto.UpdateHiringStatusRequest("HIRED")))
+                .isInstanceOf(com.demo.app.platform.exception.ResourceNotFoundException.class);
     }
 
     @Test

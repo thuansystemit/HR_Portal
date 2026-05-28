@@ -73,3 +73,12 @@ app:
     output-dir: ${CV_OUTPUT_DIR:/app/output}
   internal:
     api-key: ${INTERNAL_API_KEY:}
+  malware:
+    scan:
+      enabled: ${MALWARE_SCAN_ENABLED:false}        # set true in prod when ClamAV sidecar present
+      clamd-host: ${CLAMD_HOST:localhost}
+      clamd-port: ${CLAMD_PORT:3310}
+      timeout-ms: ${MALWARE_SCAN_TIMEOUT_MS:5000}
+      fail-open: ${MALWARE_SCAN_FAIL_OPEN:false}    # false = fail-closed (FedRAMP SI-3 default)
+  encryption:
+    pii-key: ${PII_ENCRYPTION_KEY:}                 # 64 hex chars = AES-256 key; empty = ephemeral (dev only, SC-28)

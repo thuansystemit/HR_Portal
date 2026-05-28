@@ -79,11 +79,12 @@ class JobPostingControllerTest {
 
     @Test
     void update_returns200() {
+        when(authentication.getName()).thenReturn(USER_ID.toString());
         var req = new UpdateJobPostingRequest("Updated", null, null, null, null, null, "OPEN");
         var response = buildResponse();
-        when(jobPostingService.update(POSTING_ID, req)).thenReturn(response);
+        when(jobPostingService.update(POSTING_ID, req, USER_ID)).thenReturn(response);
 
-        var result = controller.update(POSTING_ID, req);
+        var result = controller.update(POSTING_ID, req, authentication);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(result.getBody()).isEqualTo(response);
@@ -91,12 +92,13 @@ class JobPostingControllerTest {
 
     @Test
     void delete_returns204() {
-        doNothing().when(jobPostingService).delete(POSTING_ID);
+        when(authentication.getName()).thenReturn(USER_ID.toString());
+        doNothing().when(jobPostingService).delete(POSTING_ID, USER_ID);
 
-        var result = controller.delete(POSTING_ID);
+        var result = controller.delete(POSTING_ID, authentication);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
-        verify(jobPostingService).delete(POSTING_ID);
+        verify(jobPostingService).delete(POSTING_ID, USER_ID);
     }
 
     @Test
@@ -115,16 +117,17 @@ class JobPostingControllerTest {
 
     @Test
     void setSkills_returns200_withUpdatedList() {
+        when(authentication.getName()).thenReturn(USER_ID.toString());
         var input = List.of(new JobPostingSkillDto("Kotlin", true));
         var saved  = List.of(new JobPostingSkillDto("Kotlin", true));
-        when(jobPostingService.setSkills(POSTING_ID, input)).thenReturn(saved);
+        when(jobPostingService.setSkills(POSTING_ID, input, USER_ID)).thenReturn(saved);
 
-        var result = controller.setSkills(POSTING_ID, input);
+        var result = controller.setSkills(POSTING_ID, input, authentication);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(result.getBody()).hasSize(1);
         assertThat(result.getBody().get(0).skillName()).isEqualTo("Kotlin");
-        verify(jobPostingService).setSkills(POSTING_ID, input);
+        verify(jobPostingService).setSkills(POSTING_ID, input, USER_ID);
     }
 
     private JobPostingResponse buildResponse() {
