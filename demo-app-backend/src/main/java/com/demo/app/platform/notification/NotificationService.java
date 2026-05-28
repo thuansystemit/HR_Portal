@@ -41,7 +41,7 @@ public class NotificationService {
 
     @Transactional(readOnly = true)
     public List<Notification> listForUser(UUID userId) {
-        return notificationRepository.findByRecipientIdAndIsReadFalseOrderByCreatedAtDesc(userId);
+        return notificationRepository.findByRecipientIdOrderByCreatedAtDesc(userId);
     }
 
     @Transactional(readOnly = true)

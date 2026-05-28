@@ -10,6 +10,9 @@ import com.demo.app.iam.repository.*;
 import com.demo.app.platform.exception.ForbiddenException;
 import com.demo.app.platform.exception.ResourceNotFoundException;
 import com.demo.app.platform.exception.WrongPasswordException;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.impl.DefaultClaims;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +25,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
+import java.util.Date;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -360,6 +365,52 @@ class AuthServiceTest {
         authService.logout(httpRequest, httpResponse);
 
         verify(refreshTokenRepository, never()).findByTokenHashAndRevokedAtIsNull(any());
+    }
+
+    @Test
+    void logout_withAccessToken_deniesDenylistAndDeregisters() {
+        String jti = UUID.randomUUID().toString();
+        Date expiry = new Date(System.currentTimeMillis() + 900_000L);
+        Claims claims = new DefaultClaims(Map.of("sub", USER_ID.toString(), "jti", jti, "exp", expiry));
+
+        when(httpRequest.getCookies()).thenReturn(new Cookie[]{
+                new Cookie("access-token", "valid.access")
+        });
+        when(jwtService.validateAndParse("valid.access")).thenReturn(claims);
+
+        authService.logout(httpRequest, httpResponse);
+
+        verify(tokenDenylistService).deny(eq(jti), any());
+        verify(sessionActivityService).deregister(eq(jti), eq(USER_ID));
+    }
+
+    @Test
+    void logout_withAccessToken_noJti_skipsDenylist() {
+        Claims claims = new DefaultClaims(Map.of("sub", USER_ID.toString()));
+
+        when(httpRequest.getCookies()).thenReturn(new Cookie[]{
+                new Cookie("access-token", "token.no.jti")
+        });
+        when(jwtService.validateAndParse("token.no.jti")).thenReturn(claims);
+
+        authService.logout(httpRequest, httpResponse);
+
+        verify(tokenDenylistService, never()).deny(any(), any());
+    }
+
+    @Test
+    void logout_withRefreshToken_notFoundInRepo_noRevoke() {
+        String raw = UUID.randomUUID().toString();
+        String hash = authService.sha256(raw);
+
+        when(httpRequest.getCookies()).thenReturn(new Cookie[]{
+                new Cookie("refresh-token", raw)
+        });
+        when(refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(hash)).thenReturn(Optional.empty());
+
+        authService.logout(httpRequest, httpResponse);
+
+        verify(refreshTokenRepository, never()).save(any());
     }
 
     @Test

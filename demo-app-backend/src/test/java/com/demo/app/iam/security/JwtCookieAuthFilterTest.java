@@ -1,6 +1,8 @@
 package com.demo.app.iam.security;
 
 import com.demo.app.iam.service.JwtService;
+import com.demo.app.iam.service.SessionActivityService;
+import com.demo.app.iam.service.TokenDenylistService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.impl.DefaultClaims;
 import jakarta.servlet.FilterChain;
@@ -32,6 +34,8 @@ import static org.mockito.Mockito.*;
 class JwtCookieAuthFilterTest {
 
     @Mock JwtService jwtService;
+    @Mock TokenDenylistService tokenDenylistService;
+    @Mock SessionActivityService sessionActivityService;
 
     @InjectMocks
     JwtCookieAuthFilter filter;
@@ -126,5 +130,57 @@ class JwtCookieAuthFilterTest {
         assertThat(SecurityContextHolder.getContext().getAuthentication().getPrincipal())
                 .isEqualTo("existing-user");
         verify(jwtService, never()).validateAndParse(anyString());
+    }
+
+    @Test
+    void doFilter_setsAuth_andTouches_whenJtiPresent() throws ServletException, IOException {
+        String userId = UUID.randomUUID().toString();
+        String jti = java.util.UUID.randomUUID().toString();
+        request.setCookies(new Cookie("access-token", "token.with.jti"));
+
+        Claims claims = new DefaultClaims(Map.of("sub", userId, "jti", jti));
+        when(jwtService.validateAndParse("token.with.jti")).thenReturn(claims);
+        when(tokenDenylistService.isDenied(jti)).thenReturn(false);
+        when(sessionActivityService.isIdle(jti)).thenReturn(false);
+
+        filter.doFilterInternal(request, response, chain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+        verify(sessionActivityService).touch(jti);
+    }
+
+    @Test
+    void doFilter_rejectsRequest_whenTokenDenied() throws ServletException, IOException {
+        String userId = UUID.randomUUID().toString();
+        String jti = java.util.UUID.randomUUID().toString();
+        request.setCookies(new Cookie("access-token", "denied.token"));
+
+        Claims claims = new DefaultClaims(Map.of("sub", userId, "jti", jti));
+        when(jwtService.validateAndParse("denied.token")).thenReturn(claims);
+        when(tokenDenylistService.isDenied(jti)).thenReturn(true);
+
+        filter.doFilterInternal(request, response, chain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(sessionActivityService, never()).touch(any());
+    }
+
+    @Test
+    void doFilter_rejectsRequest_whenSessionIdle() throws ServletException, IOException {
+        String userId = UUID.randomUUID().toString();
+        String jti = java.util.UUID.randomUUID().toString();
+        request.setCookies(new Cookie("access-token", "idle.token"));
+
+        var expiry = new java.util.Date(System.currentTimeMillis() + 900_000L);
+        Claims claims = new DefaultClaims(Map.of("sub", userId, "jti", jti, "exp", expiry));
+        when(jwtService.validateAndParse("idle.token")).thenReturn(claims);
+        when(tokenDenylistService.isDenied(jti)).thenReturn(false);
+        when(sessionActivityService.isIdle(jti)).thenReturn(true);
+
+        filter.doFilterInternal(request, response, chain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(tokenDenylistService).deny(eq(jti), any());
+        verify(sessionActivityService).deregister(eq(jti), any());
     }
 }

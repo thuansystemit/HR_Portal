@@ -14,6 +14,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -46,11 +47,14 @@ class AuditServiceTest {
     }
 
     @Test
-    void log_doesNotThrow_whenRepositoryFails() {
+    void log_propagatesException_whenRepositoryFails() {
+        // AU-5 (FedRAMP): @Async was removed so audit failures are no longer silently swallowed.
+        // Repository failures must propagate so the caller is aware of the audit failure.
         when(repository.save(any())).thenThrow(new RuntimeException("DB error"));
 
-        assertThatCode(() -> auditService.log(ACTOR_ID, "USER_LOGIN", "User", ENTITY_ID,
+        assertThatThrownBy(() -> auditService.log(ACTOR_ID, "USER_LOGIN", "User", ENTITY_ID,
                 null, null, "success"))
-                .doesNotThrowAnyException();
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("DB error");
     }
 }

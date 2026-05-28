@@ -26,10 +26,12 @@ class JwtServiceTest {
     private static final UUID ROLE_ID = UUID.randomUUID();
 
     @BeforeAll
-    static void setUp() throws NoSuchAlgorithmException {
+    static void setUp() throws Exception {
         jwtConfig = new JwtConfig();
         ReflectionTestUtils.setField(jwtConfig, "accessExpirySeconds", 900L);
         ReflectionTestUtils.setField(jwtConfig, "refreshExpirySeconds", 604800L);
+        ReflectionTestUtils.setField(jwtConfig, "keystorePath", "");   // trigger ephemeral key path
+        jwtConfig.init();   // @PostConstruct — generates the RSA key pair
         jwtService = new JwtService(jwtConfig);
     }
 

@@ -68,9 +68,6 @@ class NotificationServiceTest {
 
     @Test
     void listForUser_returnsEmptyList_whenNoNotifications() {
-        when(notificationRepository.findByRecipientIdOrderByCreatedAtDesc(RECIPIENT_ID))
-                .thenReturn(List.of());
-
         List<Notification> result = notificationService.listForUser(RECIPIENT_ID);
 
         assertThat(result).isEmpty();
