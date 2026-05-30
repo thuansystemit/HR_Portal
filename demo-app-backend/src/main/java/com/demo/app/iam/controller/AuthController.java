@@ -2,6 +2,7 @@ package com.demo.app.iam.controller;
 
 import com.demo.app.iam.dto.AuthResponse;
 import com.demo.app.iam.dto.ChangePasswordRequest;
+import com.demo.app.iam.dto.ForceChangePasswordRequest;
 import com.demo.app.iam.dto.LoginRequest;
 import com.demo.app.iam.dto.UserInfo;
 import com.demo.app.iam.service.AuthService;
@@ -66,5 +67,14 @@ public class AuthController {
                                                @RequestBody @Valid ChangePasswordRequest request) {
         authService.changePassword(UUID.fromString(userId), request);
         return ResponseEntity.noContent().build();
+    }
+
+    // IA-5(1)(d): unauthenticated — caller holds a short-lived expire token instead of a session
+    @PostMapping("/force-change-password")
+    public ResponseEntity<AuthResponse> forceChangePassword(
+            @RequestBody @Valid ForceChangePasswordRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
+        return ResponseEntity.ok(authService.forceChangePassword(request, httpRequest, httpResponse));
     }
 }

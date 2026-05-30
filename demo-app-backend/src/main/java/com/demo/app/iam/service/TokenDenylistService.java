@@ -26,6 +26,13 @@ public class TokenDenylistService {
         }
     }
 
+    /** Deny a jti when the actual expiry is unknown — uses a fixed upper-bound TTL (AC-2). */
+    public void deny(String jti, long maxTtlSeconds) {
+        if (maxTtlSeconds > 0) {
+            redisTemplate.opsForValue().set(PREFIX + jti, "1", Duration.ofSeconds(maxTtlSeconds));
+        }
+    }
+
     public boolean isDenied(String jti) {
         return Boolean.TRUE.equals(redisTemplate.hasKey(PREFIX + jti));
     }

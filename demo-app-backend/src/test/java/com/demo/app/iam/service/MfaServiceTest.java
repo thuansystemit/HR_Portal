@@ -1,12 +1,16 @@
 package com.demo.app.iam.service;
 
+import com.demo.app.compliance.service.AuditService;
 import com.demo.app.iam.entity.Credential;
+import com.demo.app.platform.security.encryption.PiiEncryptionConverter;
+import jakarta.persistence.Convert;
 import com.demo.app.iam.entity.MfaPendingSession;
 import com.demo.app.iam.entity.User;
 import com.demo.app.iam.repository.CredentialRepository;
 import com.demo.app.iam.repository.MfaPendingSessionRepository;
 import com.demo.app.iam.repository.UserRepository;
 import com.demo.app.platform.exception.ForbiddenException;
+import com.demo.app.platform.metrics.SecurityEventRecorder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +28,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -41,6 +46,8 @@ class MfaServiceTest {
     @Mock StringRedisTemplate redisTemplate;
     @Mock ValueOperations<String, String> valueOps;
     @Mock PasswordEncoder passwordEncoder;
+    @Mock AuditService auditService;
+    @Mock SecurityEventRecorder securityEventRecorder;
     @Mock CodeVerifier codeVerifier;
 
     private MfaService mfaService;
@@ -51,7 +58,7 @@ class MfaServiceTest {
     void setUp() {
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOps);
         mfaService = new MfaService(credentialRepository, pendingSessionRepository,
-                userRepository, redisTemplate, passwordEncoder);
+                userRepository, redisTemplate, passwordEncoder, auditService, securityEventRecorder);
         ReflectionTestUtils.setField(mfaService, "codeVerifier", codeVerifier);
     }
 
@@ -377,5 +384,275 @@ class MfaServiceTest {
         assertThatThrownBy(() -> mfaService.verifyChallenge("tok", "000000"))
                 .isInstanceOf(ForbiddenException.class)
                 .hasMessageContaining("Invalid MFA code");
+    }
+
+    // --- SC-13 + SC-28: cryptographic strength and encryption-at-rest tests ---
+
+    @Test
+    void confirmSetup_generatesBackupCodesWithSufficientEntropy() {
+        var credential = new Credential();
+        credential.setMfaEnabled(false);
+        credential.setMfaSecret("valid-secret");
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(credential));
+        when(codeVerifier.isValidCode("valid-secret", "123456")).thenReturn(true);
+        when(redisTemplate.hasKey(anyString())).thenReturn(false);
+
+        var codes = mfaService.confirmSetup(USER_ID, "123456");
+
+        assertThat(codes).hasSize(10);
+        assertThat(codes).allMatch(code -> code.matches("[0-9A-F]{20}")); // 10 bytes = 80-bit entropy
+        assertThat(new java.util.HashSet<>(codes)).hasSize(10); // all distinct
+    }
+
+    @Test
+    void credential_mfaSecret_isEncryptedAtRest() throws Exception {
+        var field = Credential.class.getDeclaredField("mfaSecret");
+        var convert = field.getAnnotation(Convert.class);
+        assertThat(convert).isNotNull();
+        assertThat(convert.converter()).isEqualTo(PiiEncryptionConverter.class);
+    }
+
+    // --- AC-7 MFA brute-force lockout tests ---
+
+    @Test
+    void verifyChallenge_doesNotLock_whenFailureBelowThreshold() {
+        var session = MfaPendingSession.builder()
+                .userId(USER_ID).challengeToken("tok")
+                .expiresAt(Instant.now().plusSeconds(300)).ipAddress("127.0.0.1").build();
+        when(pendingSessionRepository.findByChallengeToken("tok")).thenReturn(Optional.of(session));
+
+        var credential = new Credential();
+        credential.setMfaSecret("sec");
+        credential.setMfaBackupCodes(List.of());
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(credential));
+        when(codeVerifier.isValidCode("sec", "000000")).thenReturn(false);
+        when(valueOps.increment("mfa:fail:" + USER_ID)).thenReturn(3L);
+
+        assertThatThrownBy(() -> mfaService.verifyChallenge("tok", "000000"))
+                .isInstanceOf(ForbiddenException.class);
+
+        assertThat(credential.getLockedUntil()).isNull();
+        verify(securityEventRecorder, never()).recordMfaLockout();
+    }
+
+    @Test
+    void verifyChallenge_locksAccount_afterMaxMfaFailures() {
+        var session = MfaPendingSession.builder()
+                .userId(USER_ID).challengeToken("tok")
+                .expiresAt(Instant.now().plusSeconds(300)).ipAddress("127.0.0.1").build();
+        when(pendingSessionRepository.findByChallengeToken("tok")).thenReturn(Optional.of(session));
+
+        var credential = new Credential();
+        credential.setMfaSecret("sec");
+        credential.setMfaBackupCodes(List.of());
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(credential));
+        when(codeVerifier.isValidCode("sec", "000000")).thenReturn(false);
+        when(valueOps.increment("mfa:fail:" + USER_ID)).thenReturn(5L);
+
+        assertThatThrownBy(() -> mfaService.verifyChallenge("tok", "000000"))
+                .isInstanceOf(ForbiddenException.class);
+
+        assertThat(credential.getLockedUntil()).isNotNull().isAfter(Instant.now());
+        verify(credentialRepository, atLeastOnce()).save(credential);
+        verify(auditService).log(USER_ID, "MFA_LOCKOUT", "User", USER_ID, null,
+                Map.of("attempts", "5"), "failure");
+        verify(securityEventRecorder).recordMfaLockout();
+    }
+
+    @Test
+    void verifyChallenge_setsTtlOnFirstMfaFailure() {
+        var session = MfaPendingSession.builder()
+                .userId(USER_ID).challengeToken("tok")
+                .expiresAt(Instant.now().plusSeconds(300)).ipAddress("127.0.0.1").build();
+        when(pendingSessionRepository.findByChallengeToken("tok")).thenReturn(Optional.of(session));
+
+        var credential = new Credential();
+        credential.setMfaSecret("sec");
+        credential.setMfaBackupCodes(List.of());
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(credential));
+        when(codeVerifier.isValidCode("sec", "000000")).thenReturn(false);
+        when(valueOps.increment("mfa:fail:" + USER_ID)).thenReturn(1L);
+
+        assertThatThrownBy(() -> mfaService.verifyChallenge("tok", "000000"))
+                .isInstanceOf(ForbiddenException.class);
+
+        verify(redisTemplate).expire(eq("mfa:fail:" + USER_ID), eq(Duration.ofSeconds(900)));
+    }
+
+    @Test
+    void verifyChallenge_clearsMfaFailures_onTotpSuccess() {
+        var session = MfaPendingSession.builder()
+                .userId(USER_ID).challengeToken("tok")
+                .expiresAt(Instant.now().plusSeconds(300)).ipAddress("127.0.0.1").build();
+        when(pendingSessionRepository.findByChallengeToken("tok")).thenReturn(Optional.of(session));
+
+        var credential = new Credential();
+        credential.setMfaSecret("sec");
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(credential));
+        when(codeVerifier.isValidCode("sec", "111111")).thenReturn(true);
+        when(redisTemplate.hasKey(anyString())).thenReturn(false);
+
+        mfaService.verifyChallenge("tok", "111111");
+
+        verify(redisTemplate).delete("mfa:fail:" + USER_ID);
+    }
+
+    // --- IA-2(8) replay-resistance tests ---
+
+    @Test
+    void verifyChallenge_rejectsReplay_whenCodeAlreadyUsed() {
+        var session = MfaPendingSession.builder()
+                .userId(USER_ID).challengeToken("tok")
+                .expiresAt(Instant.now().plusSeconds(300)).ipAddress("127.0.0.1").build();
+        when(pendingSessionRepository.findByChallengeToken("tok")).thenReturn(Optional.of(session));
+
+        var credential = new Credential();
+        credential.setMfaSecret("sec");
+        credential.setMfaBackupCodes(List.of());
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(credential));
+        when(codeVerifier.isValidCode("sec", "123456")).thenReturn(true);
+        when(redisTemplate.hasKey("mfa:used:" + USER_ID + ":123456")).thenReturn(true);
+
+        assertThatThrownBy(() -> mfaService.verifyChallenge("tok", "123456"))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("already used");
+
+        verify(auditService).log(USER_ID, "MFA_REPLAY_ATTEMPT", "User", USER_ID, null, null, "failure");
+        verify(securityEventRecorder).recordMfaReplayAttempt();
+    }
+
+    @Test
+    void verifyChallenge_marksCodeUsed_afterSuccessfulTotp() {
+        var session = MfaPendingSession.builder()
+                .userId(USER_ID).challengeToken("tok")
+                .expiresAt(Instant.now().plusSeconds(300)).ipAddress("127.0.0.1").build();
+        when(pendingSessionRepository.findByChallengeToken("tok")).thenReturn(Optional.of(session));
+
+        var credential = new Credential();
+        credential.setMfaSecret("sec");
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(credential));
+        when(codeVerifier.isValidCode("sec", "111111")).thenReturn(true);
+        when(redisTemplate.hasKey(anyString())).thenReturn(false);
+
+        mfaService.verifyChallenge("tok", "111111");
+
+        verify(valueOps).set(eq("mfa:used:" + USER_ID + ":111111"), eq("1"), eq(Duration.ofSeconds(90)));
+    }
+
+    @Test
+    void confirmSetup_rejectsReplay_whenCodeAlreadyUsed() {
+        var credential = new Credential();
+        credential.setMfaEnabled(false);
+        credential.setMfaSecret("valid-secret");
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(credential));
+        when(codeVerifier.isValidCode("valid-secret", "123456")).thenReturn(true);
+        when(redisTemplate.hasKey("mfa:used:" + USER_ID + ":123456")).thenReturn(true);
+
+        assertThatThrownBy(() -> mfaService.confirmSetup(USER_ID, "123456"))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("already used");
+
+        verify(auditService).log(USER_ID, "MFA_REPLAY_ATTEMPT", "User", USER_ID, null, null, "failure");
+        verify(securityEventRecorder).recordMfaReplayAttempt();
+    }
+
+    @Test
+    void disable_rejectsReplay_whenCodeAlreadyUsed() {
+        var credential = new Credential();
+        credential.setMfaEnabled(true);
+        credential.setMfaSecret("sec");
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(credential));
+        when(codeVerifier.isValidCode("sec", "654321")).thenReturn(true);
+        when(redisTemplate.hasKey("mfa:used:" + USER_ID + ":654321")).thenReturn(true);
+
+        assertThatThrownBy(() -> mfaService.disable(USER_ID, "654321"))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("already used");
+
+        verify(auditService).log(USER_ID, "MFA_REPLAY_ATTEMPT", "User", USER_ID, null, null, "failure");
+        verify(securityEventRecorder).recordMfaReplayAttempt();
+    }
+
+    // --- AU-2 / SI-4 audit and metric tests ---
+
+    @Test
+    void confirmSetup_success_emitsAuditEventAndMetric() {
+        var credential = new Credential();
+        credential.setMfaEnabled(false);
+        credential.setMfaSecret("valid-secret");
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(credential));
+        when(codeVerifier.isValidCode("valid-secret", "123456")).thenReturn(true);
+
+        mfaService.confirmSetup(USER_ID, "123456");
+
+        verify(auditService).log(USER_ID, "MFA_ENROLLED", "User", USER_ID, null, null, "success");
+        verify(securityEventRecorder).recordMfaEnrolled();
+    }
+
+    @Test
+    void disable_success_emitsAuditEventAndMetric() {
+        var credential = new Credential();
+        credential.setMfaEnabled(true);
+        credential.setMfaSecret("sec");
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(credential));
+        when(codeVerifier.isValidCode("sec", "654321")).thenReturn(true);
+
+        mfaService.disable(USER_ID, "654321");
+
+        verify(auditService).log(USER_ID, "MFA_DISABLED", "User", USER_ID, null, null, "success");
+        verify(securityEventRecorder).recordMfaDisabled();
+    }
+
+    @Test
+    void verifyChallenge_failure_emitsAuditEventAndMetric() {
+        var session = MfaPendingSession.builder()
+                .userId(USER_ID)
+                .challengeToken("tok")
+                .expiresAt(Instant.now().plusSeconds(300))
+                .ipAddress("127.0.0.1")
+                .build();
+        when(pendingSessionRepository.findByChallengeToken("tok")).thenReturn(Optional.of(session));
+
+        var credential = new Credential();
+        credential.setMfaSecret("sec");
+        credential.setMfaBackupCodes(List.of());
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(credential));
+        when(codeVerifier.isValidCode("sec", "000000")).thenReturn(false);
+
+        assertThatThrownBy(() -> mfaService.verifyChallenge("tok", "000000"))
+                .isInstanceOf(ForbiddenException.class);
+
+        verify(auditService).log(USER_ID, "MFA_VERIFY_FAILED", "User", USER_ID, null, null, "failure");
+        verify(securityEventRecorder).recordMfaVerifyFailed();
+    }
+
+    @Test
+    void verifyChallenge_backupCode_emitsAuditEventAndMetric() {
+        var session = MfaPendingSession.builder()
+                .userId(USER_ID)
+                .challengeToken("tok")
+                .expiresAt(Instant.now().plusSeconds(300))
+                .ipAddress("127.0.0.1")
+                .build();
+        when(pendingSessionRepository.findByChallengeToken("tok")).thenReturn(Optional.of(session));
+
+        var credential = new Credential();
+        credential.setMfaSecret("sec");
+        String backupCode = "AABBCCDDEE";
+        try {
+            var digest = java.security.MessageDigest.getInstance("SHA-256");
+            String hashed = java.util.HexFormat.of().formatHex(
+                    digest.digest(backupCode.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            credential.setMfaBackupCodes(new ArrayList<>(List.of(hashed)));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(credential));
+        when(codeVerifier.isValidCode("sec", backupCode)).thenReturn(false);
+
+        mfaService.verifyChallenge("tok", backupCode);
+
+        verify(auditService).log(USER_ID, "MFA_BACKUP_CODE_USED", "User", USER_ID, null, null, "success");
+        verify(securityEventRecorder).recordMfaBackupCodeUsed();
     }
 }

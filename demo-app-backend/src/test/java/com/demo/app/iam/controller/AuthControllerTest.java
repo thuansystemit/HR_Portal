@@ -2,6 +2,7 @@ package com.demo.app.iam.controller;
 
 import com.demo.app.iam.dto.AuthResponse;
 import com.demo.app.iam.dto.ChangePasswordRequest;
+import com.demo.app.iam.dto.ForceChangePasswordRequest;
 import com.demo.app.iam.dto.LoginRequest;
 import com.demo.app.iam.dto.UserInfo;
 import com.demo.app.iam.service.AuthService;
@@ -52,7 +53,7 @@ class AuthControllerTest {
     @Test
     void login_delegatesToService_returnsOk() {
         var request = new LoginRequest("a@b.com", "pass");
-        var userInfo = new UserInfo(USER_ID, "Test User", "a@b.com", null, null, Set.of());
+        var userInfo = new UserInfo(USER_ID, "Test User", "a@b.com", null, null, Set.of(), null);
         var authResponse = new AuthResponse(userInfo);
 
         when(req.getRemoteAddr()).thenReturn("127.0.0.1");
@@ -68,7 +69,7 @@ class AuthControllerTest {
 
     @Test
     void refresh_delegatesToService_returnsOk() {
-        var userInfo = new UserInfo(USER_ID, "Test User", "a@b.com", null, null, Set.of());
+        var userInfo = new UserInfo(USER_ID, "Test User", "a@b.com", null, null, Set.of(), null);
         var authResponse = new AuthResponse(userInfo);
 
         when(authService.refresh(req, resp)).thenReturn(authResponse);
@@ -90,7 +91,7 @@ class AuthControllerTest {
     @Test
     void me_delegatesToService_returnsOk() {
         var userId = USER_ID.toString();
-        var userInfo = new UserInfo(USER_ID, "Test User", "a@b.com", null, null, Set.of("perm.view"));
+        var userInfo = new UserInfo(USER_ID, "Test User", "a@b.com", null, null, Set.of("perm.view"), null);
 
         when(authService.getMe(USER_ID)).thenReturn(userInfo);
 
@@ -109,5 +110,19 @@ class AuthControllerTest {
 
         verify(authService).changePassword(eq(USER_ID), eq(request));
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void forceChangePassword_delegatesToService_returnsOk() {
+        var request = new ForceChangePasswordRequest("expire-tok", "NewPass1234!");
+        var userInfo = new UserInfo(USER_ID, "Test", "a@b.com", null, null, Set.of(), null);
+        var authResponse = new AuthResponse(userInfo);
+
+        when(authService.forceChangePassword(eq(request), any(), any())).thenReturn(authResponse);
+
+        var result = authController.forceChangePassword(request, req, resp);
+
+        assertThat(result.getStatusCode().value()).isEqualTo(200);
+        assertThat(result.getBody()).isEqualTo(authResponse);
     }
 }

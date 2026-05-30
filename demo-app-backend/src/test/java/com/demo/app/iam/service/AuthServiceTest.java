@@ -1,6 +1,8 @@
 package com.demo.app.iam.service;
 
+import com.demo.app.compliance.service.AuditService;
 import com.demo.app.iam.dto.ChangePasswordRequest;
+import com.demo.app.iam.dto.ForceChangePasswordRequest;
 import com.demo.app.iam.dto.LoginRequest;
 import com.demo.app.iam.entity.Credential;
 import com.demo.app.iam.entity.RefreshToken;
@@ -8,6 +10,8 @@ import com.demo.app.iam.entity.Role;
 import com.demo.app.iam.entity.User;
 import com.demo.app.iam.repository.*;
 import com.demo.app.platform.exception.ForbiddenException;
+import com.demo.app.platform.exception.PasswordPolicyException;
+import com.demo.app.platform.metrics.SecurityEventRecorder;
 import com.demo.app.platform.exception.ResourceNotFoundException;
 import com.demo.app.platform.exception.WrongPasswordException;
 import io.jsonwebtoken.Claims;
@@ -34,6 +38,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -50,6 +56,11 @@ class AuthServiceTest {
     @Mock TokenDenylistService tokenDenylistService;
     @Mock SessionActivityService sessionActivityService;
     @Mock MfaService mfaService;
+    @Mock SecurityEventRecorder securityEventRecorder;
+    @Mock PasswordPolicyService passwordPolicyService;
+    @Mock PasswordHistoryService passwordHistoryService;
+    @Mock PasswordExpireService passwordExpireService;
+    @Mock AuditService auditService;
     @Mock HttpServletResponse httpResponse;
     @Mock HttpServletRequest httpRequest;
 
@@ -65,6 +76,8 @@ class AuthServiceTest {
         ReflectionTestUtils.setField(authService, "accessExpiry", 900);
         ReflectionTestUtils.setField(authService, "refreshExpiry", 604800);
         ReflectionTestUtils.setField(authService, "cookieSecure", false);
+        ReflectionTestUtils.setField(authService, "passwordMaxAgeDays", 60);
+        ReflectionTestUtils.setField(authService, "passwordMinAgeDays", 0); // disabled for most tests
     }
 
     @Test
@@ -169,11 +182,74 @@ class AuthServiceTest {
     }
 
     @Test
+    void login_setsLastLoginAt_onSuccessfulCredentialValidation() {
+        // IA-4(e): lastLoginAt must be persisted so the inactivity scheduler can find active accounts
+        var user = User.builder().id(USER_ID).email("a@b.com").status("active").fullName("Test").build();
+        var cred = Credential.builder().userId(USER_ID).passwordHash("$hash")
+                .failedAttempts(0).mfaEnabled(true).build();
+
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("a@b.com"))
+                .thenReturn(Optional.of(user));
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cred));
+        when(passwordEncoder.matches("pass123", "$hash")).thenReturn(true);
+        when(credentialRepository.save(any())).thenReturn(cred);
+        when(mfaService.createChallenge(USER_ID, "127.0.0.1")).thenReturn("challenge-token");
+
+        var before = Instant.now().minusSeconds(1);
+        authService.login(new LoginRequest("a@b.com", "pass123"), httpResponse, "127.0.0.1", "ua");
+
+        assertThat(cred.getLastLoginAt()).isNotNull();
+        assertThat(cred.getLastLoginAt()).isAfter(before);
+    }
+
+    @Test
+    void login_setsPreviousLoginAt_fromExistingLastLoginAt() {
+        // AC-9: previous login must be preserved before lastLoginAt is overwritten
+        var priorLogin = Instant.now().minusSeconds(3600);
+        var user = User.builder().id(USER_ID).email("a@b.com").status("active").fullName("Test").build();
+        var cred = Credential.builder().userId(USER_ID).passwordHash("$hash")
+                .failedAttempts(0).mfaEnabled(true).lastLoginAt(priorLogin).build();
+
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("a@b.com"))
+                .thenReturn(Optional.of(user));
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cred));
+        when(passwordEncoder.matches("pass123", "$hash")).thenReturn(true);
+        when(credentialRepository.save(any())).thenReturn(cred);
+        when(mfaService.createChallenge(USER_ID, "127.0.0.1")).thenReturn("challenge-token");
+
+        authService.login(new LoginRequest("a@b.com", "pass123"), httpResponse, "127.0.0.1", "ua");
+
+        assertThat(cred.getPreviousLoginAt()).isEqualTo(priorLogin);
+        assertThat(cred.getLastLoginAt()).isNotNull().isAfter(priorLogin);
+    }
+
+    @Test
+    void getMe_includesPreviousLoginAt_inUserInfo() {
+        // AC-9: previous login time is surfaced in UserInfo so the frontend can display it
+        var priorLogin = Instant.now().minusSeconds(7200);
+        var user = User.builder().id(USER_ID).email("a@b.com").fullName("Test").status("active").build();
+        var cred = Credential.builder().userId(USER_ID).passwordHash("$hash")
+                .previousLoginAt(priorLogin).build();
+        var permSet = new PermissionCacheService.PermissionSet(null, Set.of());
+
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
+        when(permissionCacheService.loadPermissions(USER_ID)).thenReturn(permSet);
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cred));
+
+        var result = authService.getMe(USER_ID);
+
+        assertThat(result.previousLoginAt()).isEqualTo(priorLogin);
+    }
+
+    @Test
     void issueTokensForUser_succeeds_underSessionLimit() {
         var user = User.builder().id(USER_ID).email("a@b.com").fullName("Test").status("active").build();
+        var cred = Credential.builder().userId(USER_ID).passwordHash("$h")
+                .passwordChangedAt(Instant.now()).build();
         var permSet = new PermissionCacheService.PermissionSet(UUID.randomUUID(), Set.of("usersView"));
 
         when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cred));
         when(permissionCacheService.loadPermissions(USER_ID)).thenReturn(permSet);
         when(jwtService.generateAccessToken(any(), any(), any(), any())).thenReturn("jwt.token.here");
         when(refreshTokenRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -333,9 +409,11 @@ class AuthServiceTest {
 
     @Test
     void changePassword_succeeds() {
+        var user = User.builder().id(USER_ID).email("u@t.com").fullName("Test User").build();
         var cred = Credential.builder().userId(USER_ID).passwordHash("$old").build();
         when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cred));
         when(passwordEncoder.matches("oldPass", "$old")).thenReturn(true);
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
         when(passwordEncoder.encode("newPass")).thenReturn("$new");
         when(credentialRepository.save(any())).thenReturn(cred);
 
@@ -343,6 +421,12 @@ class AuthServiceTest {
 
         assertThat(cred.getPasswordHash()).isEqualTo("$new");
         verify(permissionCacheService).evict(USER_ID);
+        verify(passwordPolicyService).validate("newPass", "u@t.com", "Test User");
+        verify(passwordHistoryService).checkNotReused(USER_ID, "newPass");
+        verify(passwordHistoryService).record(USER_ID, "$new");
+        // AU-2: password change must be recorded in the audit trail
+        verify(auditService).log(eq(USER_ID), eq("USER_PASSWORD_CHANGED"),
+                eq("User"), eq(USER_ID), isNull(), isNull(), eq("success"));
     }
 
     @Test
@@ -356,6 +440,60 @@ class AuthServiceTest {
                 .isInstanceOf(WrongPasswordException.class);
 
         verify(credentialRepository, never()).save(any());
+    }
+
+    @Test
+    void changePassword_throws_whenPasswordChangedTooRecently() {
+        // IA-5(1)(b): minimum password lifetime enforced to prevent cycling through history
+        ReflectionTestUtils.setField(authService, "passwordMinAgeDays", 1);
+        var cred = Credential.builder().userId(USER_ID).passwordHash("$old")
+                .passwordChangedAt(Instant.now().minusSeconds(3600)).build(); // changed 1 hour ago
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cred));
+        when(passwordEncoder.matches("oldPass", "$old")).thenReturn(true);
+
+        assertThatThrownBy(() -> authService.changePassword(USER_ID,
+                new ChangePasswordRequest("oldPass", "newPass", "newPass")))
+                .isInstanceOf(PasswordPolicyException.class)
+                .extracting(e -> ((PasswordPolicyException) e).getViolations())
+                .asList()
+                .anyMatch(v -> v.toString().contains("minimum age"));
+
+        verify(credentialRepository, never()).save(any());
+    }
+
+    @Test
+    void changePassword_succeeds_whenMinAgeElapsed() {
+        ReflectionTestUtils.setField(authService, "passwordMinAgeDays", 1);
+        var user = User.builder().id(USER_ID).email("u@t.com").fullName("Test User").build();
+        var cred = Credential.builder().userId(USER_ID).passwordHash("$old")
+                .passwordChangedAt(Instant.now().minusSeconds(2L * 86_400)).build(); // changed 2 days ago
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cred));
+        when(passwordEncoder.matches("oldPass", "$old")).thenReturn(true);
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode("newPass")).thenReturn("$new");
+        when(credentialRepository.save(any())).thenReturn(cred);
+
+        authService.changePassword(USER_ID, new ChangePasswordRequest("oldPass", "newPass", "newPass"));
+
+        assertThat(cred.getPasswordHash()).isEqualTo("$new");
+    }
+
+    @Test
+    void changePassword_skipsMinAgeCheck_whenMinAgeDaysIsZero() {
+        ReflectionTestUtils.setField(authService, "passwordMinAgeDays", 0);
+        var user = User.builder().id(USER_ID).email("u@t.com").fullName("Test User").build();
+        // changed 1 second ago — would fail if min-age were active
+        var cred = Credential.builder().userId(USER_ID).passwordHash("$old")
+                .passwordChangedAt(Instant.now().minusSeconds(1)).build();
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cred));
+        when(passwordEncoder.matches("oldPass", "$old")).thenReturn(true);
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode("newPass")).thenReturn("$new");
+        when(credentialRepository.save(any())).thenReturn(cred);
+
+        authService.changePassword(USER_ID, new ChangePasswordRequest("oldPass", "newPass", "newPass"));
+
+        assertThat(cred.getPasswordHash()).isEqualTo("$new");
     }
 
     @Test
@@ -426,6 +564,163 @@ class AuthServiceTest {
         assertThat(result.id()).isEqualTo(USER_ID);
         assertThat(result.roleName()).isNull();
         assertThat(result.roleId()).isNull();
+    }
+
+    @Test
+    void issueTokensForUser_returnsPasswordExpired_whenPasswordExceedsMaxAge() {
+        var user = User.builder().id(USER_ID).email("a@b.com").status("active").build();
+        var cred = Credential.builder().userId(USER_ID).passwordHash("$h")
+                .passwordChangedAt(Instant.now().minusSeconds(61L * 86_400)).build();
+
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
+        when(sessionActivityService.countActiveSessions(USER_ID)).thenReturn(0);
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cred));
+        when(passwordExpireService.createExpireToken(USER_ID)).thenReturn("expire-token");
+
+        var result = authService.issueTokensForUser(USER_ID, httpRequest, httpResponse);
+
+        assertThat(result.passwordExpired()).isTrue();
+        assertThat(result.expireToken()).isEqualTo("expire-token");
+        assertThat(result.user()).isNull();
+        verify(passwordExpireService).createExpireToken(USER_ID);
+    }
+
+    @Test
+    void issueTokensForUser_skipsExpiryCheck_whenMaxAgeDaysIsZero() {
+        ReflectionTestUtils.setField(authService, "passwordMaxAgeDays", 0);
+
+        var user = User.builder().id(USER_ID).email("a@b.com").fullName("Test").status("active").build();
+        var cred = Credential.builder().userId(USER_ID).passwordHash("$h")
+                .passwordChangedAt(Instant.now().minusSeconds(365L * 86_400)).build();
+        var permSet = new PermissionCacheService.PermissionSet(UUID.randomUUID(), Set.of());
+
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cred));
+        when(sessionActivityService.countActiveSessions(USER_ID)).thenReturn(0);
+        when(permissionCacheService.loadPermissions(USER_ID)).thenReturn(permSet);
+        when(jwtService.generateAccessToken(any(), any(), any(), any())).thenReturn("tok");
+        when(refreshTokenRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(httpRequest.getRemoteAddr()).thenReturn("127.0.0.1");
+        when(httpRequest.getHeader("User-Agent")).thenReturn("ua");
+        when(roleRepository.findById(any())).thenReturn(Optional.empty());
+
+        var result = authService.issueTokensForUser(USER_ID, httpRequest, httpResponse);
+
+        assertThat(result.passwordExpired()).isNull();
+        assertThat(result.user()).isNotNull();
+    }
+
+    @Test
+    void forceChangePassword_succeeds_andIssuesFullSession() {
+        var userId = UUID.randomUUID();
+        var user = User.builder().id(userId).email("u@t.com").fullName("Test User").status("active").build();
+        var cred = Credential.builder().userId(userId).passwordHash("$old")
+                .passwordChangedAt(Instant.now().minusSeconds(100)).build();
+        var permSet = new PermissionCacheService.PermissionSet(UUID.randomUUID(), Set.of());
+
+        when(passwordExpireService.validateAndConsume("expire-tok")).thenReturn(userId);
+        when(credentialRepository.findByUserId(userId)).thenReturn(Optional.of(cred));
+        when(userRepository.findByIdAndDeletedAtIsNull(userId)).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode("NewPass1234!")).thenReturn("$new");
+        when(credentialRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(sessionActivityService.countActiveSessions(userId)).thenReturn(0);
+        when(permissionCacheService.loadPermissions(userId)).thenReturn(permSet);
+        when(jwtService.generateAccessToken(any(), any(), any(), any())).thenReturn("tok");
+        when(refreshTokenRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(httpRequest.getRemoteAddr()).thenReturn("127.0.0.1");
+        when(httpRequest.getHeader("User-Agent")).thenReturn("ua");
+        when(roleRepository.findById(any())).thenReturn(Optional.empty());
+
+        var result = authService.forceChangePassword(
+                new ForceChangePasswordRequest("expire-tok", "NewPass1234!"),
+                httpRequest, httpResponse);
+
+        assertThat(result.user()).isNotNull();
+        assertThat(cred.getPasswordHash()).isEqualTo("$new");
+        assertThat(cred.getPasswordChangedAt()).isAfter(Instant.now().minusSeconds(5));
+        verify(auditService).log(eq(userId), eq("USER_PASSWORD_FORCE_CHANGED"),
+                eq("User"), eq(userId), isNull(), isNull(), eq("success"));
+        verify(passwordHistoryService).checkNotReused(userId, "NewPass1234!");
+        verify(passwordHistoryService).record(userId, "$new");
+    }
+
+    @Test
+    void forceChangePassword_throws_whenTokenInvalid() {
+        when(passwordExpireService.validateAndConsume("bad-token"))
+                .thenThrow(new ForbiddenException("Invalid or expired password-change token"));
+
+        assertThatThrownBy(() -> authService.forceChangePassword(
+                new ForceChangePasswordRequest("bad-token", "NewPass1234!"),
+                httpRequest, httpResponse))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("expired");
+    }
+
+    @Test
+    void issueTokensForUser_returnsPasswordExpired_whenMustChangePasswordIsSet() {
+        // IA-5(1)(f): admin-provisioned accounts must change password on first login
+        var user = User.builder().id(USER_ID).email("a@b.com").status("active").build();
+        var cred = Credential.builder().userId(USER_ID).passwordHash("$h")
+                .mustChangePassword(true).build();
+
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
+        when(sessionActivityService.countActiveSessions(USER_ID)).thenReturn(0);
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cred));
+        when(passwordExpireService.createExpireToken(USER_ID)).thenReturn("expire-token");
+
+        var result = authService.issueTokensForUser(USER_ID, httpRequest, httpResponse);
+
+        assertThat(result.passwordExpired()).isTrue();
+        assertThat(result.expireToken()).isEqualTo("expire-token");
+        assertThat(result.user()).isNull();
+        verify(passwordExpireService).createExpireToken(USER_ID);
+    }
+
+    @Test
+    void forceChangePassword_clearsMustChangePassword_afterSuccessfulChange() {
+        var userId = UUID.randomUUID();
+        var user = User.builder().id(userId).email("u@t.com").fullName("New User").status("active").build();
+        var cred = Credential.builder().userId(userId).passwordHash("$old")
+                .mustChangePassword(true)
+                .passwordChangedAt(Instant.now().minusSeconds(100)).build();
+        var permSet = new PermissionCacheService.PermissionSet(UUID.randomUUID(), Set.of());
+
+        when(passwordExpireService.validateAndConsume("expire-tok")).thenReturn(userId);
+        when(credentialRepository.findByUserId(userId)).thenReturn(Optional.of(cred));
+        when(userRepository.findByIdAndDeletedAtIsNull(userId)).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode("NewPass1234!")).thenReturn("$new");
+        when(credentialRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(sessionActivityService.countActiveSessions(userId)).thenReturn(0);
+        when(permissionCacheService.loadPermissions(userId)).thenReturn(permSet);
+        when(jwtService.generateAccessToken(any(), any(), any(), any())).thenReturn("tok");
+        when(refreshTokenRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(httpRequest.getRemoteAddr()).thenReturn("127.0.0.1");
+        when(httpRequest.getHeader("User-Agent")).thenReturn("ua");
+        when(roleRepository.findById(any())).thenReturn(Optional.empty());
+
+        authService.forceChangePassword(
+                new ForceChangePasswordRequest("expire-tok", "NewPass1234!"),
+                httpRequest, httpResponse);
+
+        assertThat(cred.isMustChangePassword()).isFalse();
+    }
+
+    @Test
+    void changePassword_stampsPasswordChangedAt() {
+        var user = User.builder().id(USER_ID).email("u@t.com").fullName("Test User").build();
+        var before = Instant.now().minusSeconds(1000);
+        var cred = Credential.builder().userId(USER_ID).passwordHash("$old")
+                .passwordChangedAt(before).build();
+
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cred));
+        when(passwordEncoder.matches("oldPass", "$old")).thenReturn(true);
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode("newPass")).thenReturn("$new");
+        when(credentialRepository.save(any())).thenReturn(cred);
+
+        authService.changePassword(USER_ID, new ChangePasswordRequest("oldPass", "newPass", "newPass"));
+
+        assertThat(cred.getPasswordChangedAt()).isAfter(before);
     }
 
     @Test

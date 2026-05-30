@@ -82,3 +82,23 @@ app:
       fail-open: ${MALWARE_SCAN_FAIL_OPEN:false}    # false = fail-closed (FedRAMP SI-3 default)
   encryption:
     pii-key: ${PII_ENCRYPTION_KEY:}                 # 64 hex chars = AES-256 key; empty = ephemeral (dev only, SC-28)
+  password:
+    history:
+      count: ${PASSWORD_HISTORY_COUNT:5}          # IA-5(1)(h): number of previous passwords to block reuse of
+    max-age-days: ${PASSWORD_MAX_AGE_DAYS:60}     # IA-5(1)(d): force password rotation after this many days
+    min-age-days: ${PASSWORD_MIN_AGE_DAYS:1}      # IA-5(1)(b): minimum days before a password may be changed again
+  data:
+    retention:
+      cv-days: ${CV_RETENTION_DAYS:1095}          # SI-12: anonymise CV PII after this many days (default 3 years)
+  audit:
+    retention:
+      online-days: ${AUDIT_RETENTION_DAYS:365}      # AU-11: events older than this are archived and purged
+    archive-path: ${AUDIT_ARCHIVE_PATH:/app/audit-archives}
+  account:
+    inactivity:
+      deactivate-after-days: ${ACCOUNT_INACTIVITY_DAYS:90}  # IA-4(e): deactivate accounts inactive this many days
+  mfa:
+    max-failures: ${MFA_MAX_FAILURES:5}            # AC-7: lock after this many consecutive MFA failures
+    lockout-seconds: ${MFA_LOCKOUT_SECONDS:900}    # AC-7: lockout duration matches password lockout (15 min)
+  security:
+    enforce-config-check: ${ENFORCE_CONFIG_CHECK:false}    # CM-6: set true in prod to fail-fast on misconfiguration

@@ -80,7 +80,7 @@ class MfaControllerTest {
         var enrollResult = new MfaService.EnrollConfirmResult(USER_ID, List.of("BC1", "BC2"));
         when(mfaService.confirmSetupByToken("enroll-token", "123456")).thenReturn(enrollResult);
 
-        var userInfo = new UserInfo(USER_ID, "Test", "t@t.com", null, null, Set.of());
+        var userInfo = new UserInfo(USER_ID, "Test", "t@t.com", null, null, Set.of(), null);
         when(authService.issueTokensForUser(USER_ID, httpRequest, httpResponse))
                 .thenReturn(new AuthResponse(userInfo));
 
@@ -99,7 +99,7 @@ class MfaControllerTest {
     void verify_verifiesChallengeAndIssuesTokens() {
         when(mfaService.verifyChallenge("challenge-token", "654321")).thenReturn(USER_ID);
 
-        var userInfo = new UserInfo(USER_ID, "Test", "t@t.com", null, null, Set.of());
+        var userInfo = new UserInfo(USER_ID, "Test", "t@t.com", null, null, Set.of(), null);
         when(authService.issueTokensForUser(USER_ID, httpRequest, httpResponse))
                 .thenReturn(new AuthResponse(userInfo));
 

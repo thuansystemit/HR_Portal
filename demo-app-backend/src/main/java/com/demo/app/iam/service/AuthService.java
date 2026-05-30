@@ -1,13 +1,17 @@
 package com.demo.app.iam.service;
 
+import com.demo.app.compliance.service.AuditService;
 import com.demo.app.iam.dto.AuthResponse;
 import com.demo.app.iam.dto.ChangePasswordRequest;
+import com.demo.app.iam.dto.ForceChangePasswordRequest;
+import com.demo.app.platform.metrics.SecurityEventRecorder;
 import com.demo.app.iam.dto.LoginRequest;
 import com.demo.app.iam.dto.UserInfo;
 import com.demo.app.iam.entity.Credential;
 import com.demo.app.iam.entity.RefreshToken;
 import com.demo.app.iam.repository.*;
 import com.demo.app.platform.exception.ForbiddenException;
+import com.demo.app.platform.exception.PasswordPolicyException;
 import com.demo.app.platform.exception.ResourceNotFoundException;
 import com.demo.app.platform.exception.WrongPasswordException;
 import jakarta.servlet.http.Cookie;
@@ -24,6 +28,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -43,6 +48,11 @@ public class AuthService {
     private final TokenDenylistService tokenDenylistService;
     private final SessionActivityService sessionActivityService;
     private final MfaService mfaService;
+    private final SecurityEventRecorder securityEventRecorder;
+    private final PasswordPolicyService passwordPolicyService;
+    private final PasswordHistoryService passwordHistoryService;
+    private final PasswordExpireService passwordExpireService;
+    private final AuditService auditService;
 
     @Value("${app.cookie.secure:false}")
     private boolean cookieSecure;
@@ -56,6 +66,12 @@ public class AuthService {
     @Value("${app.session.max-concurrent:5}")
     private int maxConcurrentSessions;
 
+    @Value("${app.password.max-age-days:60}")
+    private int passwordMaxAgeDays = 60;
+
+    @Value("${app.password.min-age-days:1}")
+    private int passwordMinAgeDays = 1;
+
     @Transactional
     public AuthResponse login(LoginRequest request, HttpServletResponse response,
                               String ipAddress, String userAgent) {
@@ -63,6 +79,8 @@ public class AuthService {
                 .orElseThrow(() -> new ForbiddenException("Invalid credentials"));
 
         if (!"active".equals(user.getStatus())) {
+            securityEventRecorder.recordLoginFailure();
+            securityEventRecorder.recordFailureAccountInactive();
             throw new ForbiddenException("Account is inactive");
         }
 
@@ -70,17 +88,25 @@ public class AuthService {
                 .orElseThrow(() -> new ForbiddenException("Invalid credentials"));
 
         if (credential.getLockedUntil() != null && credential.getLockedUntil().isAfter(Instant.now())) {
+            securityEventRecorder.recordLoginFailure();
+            securityEventRecorder.recordFailureAccountLocked();
             throw new ForbiddenException("Account is temporarily locked");
         }
 
         if (!passwordEncoder.matches(request.password(), credential.getPasswordHash())) {
+            securityEventRecorder.recordLoginFailure();
+            securityEventRecorder.recordFailureBadCredentials();
             handleFailedLogin(credential);
             throw new ForbiddenException("Invalid credentials");
         }
 
         credential.setFailedAttempts(0);
         credential.setLockedUntil(null);
+        // AC-9: preserve previous login time before overwriting so it can be shown on next session
+        credential.setPreviousLoginAt(credential.getLastLoginAt());
+        credential.setLastLoginAt(Instant.now());
         credentialRepository.save(credential);
+        securityEventRecorder.recordLoginSuccess();
 
         // IA-2 hard-block: unenrolled users must complete MFA setup before getting tokens
         if (!credential.isMfaEnabled()) {
@@ -100,7 +126,17 @@ public class AuthService {
 
         // AC-10: enforce concurrent session limit
         if (sessionActivityService.countActiveSessions(userId) >= maxConcurrentSessions) {
+            securityEventRecorder.recordLoginFailure();
+            securityEventRecorder.recordFailureSessionLimit();
             throw new ForbiddenException("Maximum concurrent sessions reached");
+        }
+
+        // IA-5(1)(f)+(d): block token issuance when a forced change is required (new account or admin reset)
+        // or when the password has exceeded its maximum age
+        var credential = credentialRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Credential not found"));
+        if (credential.isMustChangePassword() || isPasswordExpired(credential)) {
+            return AuthResponse.passwordExpired(passwordExpireService.createExpireToken(userId));
         }
 
         var permSet = permissionCacheService.loadPermissions(userId);
@@ -119,6 +155,7 @@ public class AuthService {
         setAccessCookie(response, accessToken);
         setRefreshCookie(response, rawRefresh);
         sessionActivityService.register(jti, userId);
+        securityEventRecorder.recordTokenIssued();
         return new AuthResponse(buildUserInfo(userId, permSet));
     }
 
@@ -203,15 +240,67 @@ public class AuthService {
         if (!passwordEncoder.matches(request.currentPassword(), credential.getPasswordHash())) {
             throw new WrongPasswordException();
         }
-        credential.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+
+        // IA-5(1)(b): enforce minimum password lifetime to prevent rapid cycling that defeats history control
+        if (passwordMinAgeDays > 0) {
+            var earliest = credential.getPasswordChangedAt().plusSeconds((long) passwordMinAgeDays * 86_400);
+            if (Instant.now().isBefore(earliest)) {
+                throw new PasswordPolicyException(List.of(
+                        "Password cannot be changed yet — minimum age is " + passwordMinAgeDays + " day(s)"));
+            }
+        }
+
+        var user = userRepository.findByIdAndDeletedAtIsNull(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+        passwordPolicyService.validate(request.newPassword(), user.getEmail(), user.getFullName());
+        passwordHistoryService.checkNotReused(userId, request.newPassword());
+
+        var encoded = passwordEncoder.encode(request.newPassword());
+        credential.setPasswordHash(encoded);
+        credential.setPasswordChangedAt(Instant.now());
         credentialRepository.save(credential);
+        passwordHistoryService.record(userId, encoded);
         permissionCacheService.evict(userId);
+        // AU-2: audit password changes so credential rotation events appear in the audit trail
+        auditService.log(userId, "USER_PASSWORD_CHANGED", "User", userId, null, null, "success");
+    }
+
+    @Transactional
+    public AuthResponse forceChangePassword(ForceChangePasswordRequest request,
+                                             HttpServletRequest httpRequest,
+                                             HttpServletResponse httpResponse) {
+        var userId = passwordExpireService.validateAndConsume(request.expireToken());
+        var credential = credentialRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Credential not found"));
+        var user = userRepository.findByIdAndDeletedAtIsNull(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+
+        passwordPolicyService.validate(request.newPassword(), user.getEmail(), user.getFullName());
+        passwordHistoryService.checkNotReused(userId, request.newPassword());
+
+        var encoded = passwordEncoder.encode(request.newPassword());
+        credential.setPasswordHash(encoded);
+        credential.setPasswordChangedAt(Instant.now());
+        credential.setMustChangePassword(false);
+        credentialRepository.save(credential);
+        passwordHistoryService.record(userId, encoded);
+        permissionCacheService.evict(userId);
+        auditService.log(userId, "USER_PASSWORD_FORCE_CHANGED", "User", userId, null, null, "success");
+
+        return issueTokensForUser(userId, httpRequest, httpResponse);
+    }
+
+    private boolean isPasswordExpired(Credential credential) {
+        if (passwordMaxAgeDays <= 0) return false;
+        var expiry = credential.getPasswordChangedAt().plusSeconds((long) passwordMaxAgeDays * 86_400);
+        return Instant.now().isAfter(expiry);
     }
 
     private void handleFailedLogin(Credential credential) {
         credential.setFailedAttempts(credential.getFailedAttempts() + 1);
         if (credential.getFailedAttempts() >= 5) {
             credential.setLockedUntil(Instant.now().plusSeconds(900));
+            securityEventRecorder.recordAccountLockout();
         }
         credentialRepository.save(credential);
     }
@@ -222,8 +311,11 @@ public class AuthService {
         var roleName = permSet.roleId() != null
                 ? roleRepository.findById(permSet.roleId()).map(r -> r.getName()).orElse(null)
                 : null;
+        var previousLoginAt = credentialRepository.findByUserId(userId)
+                .map(c -> c.getPreviousLoginAt())
+                .orElse(null);
         return new UserInfo(user.getId(), user.getFullName(), user.getEmail(),
-                permSet.roleId(), roleName, permSet.codes());
+                permSet.roleId(), roleName, permSet.codes(), previousLoginAt);
     }
 
     private void setAccessCookie(HttpServletResponse response, String token) {

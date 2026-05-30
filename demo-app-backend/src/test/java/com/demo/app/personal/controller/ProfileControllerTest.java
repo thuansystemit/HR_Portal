@@ -33,7 +33,7 @@ class ProfileControllerTest {
     @Test
     void me_returnsOk() {
         var userId = USER_ID.toString();
-        var userInfo = new UserInfo(USER_ID, "Test User", "test@example.com", null, null, Set.of());
+        var userInfo = new UserInfo(USER_ID, "Test User", "test@example.com", null, null, Set.of(), null);
 
         when(authService.getMe(USER_ID)).thenReturn(userInfo);
 

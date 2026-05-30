@@ -1,6 +1,8 @@
 package com.demo.app.iam.controller;
 
+import com.demo.app.iam.dto.AdminResetPasswordRequest;
 import com.demo.app.iam.dto.CreateUserRequest;
+import com.demo.app.iam.dto.LockStatusResponse;
 import com.demo.app.iam.dto.PagedResponse;
 import com.demo.app.iam.dto.UpdateUserRequest;
 import com.demo.app.iam.dto.UserResponse;
@@ -11,6 +13,7 @@ import com.demo.app.platform.idempotency.IdempotencyService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -51,7 +54,7 @@ public class UserController {
                         .body(cached.get());
             }
         }
-        var created = userService.create(request);
+        var created = userService.create(request, userId != null ? UUID.fromString(userId) : null);
         if (idempotencyKey != null && userId != null) {
             idempotencyService.store(UUID.fromString(userId), "user", idempotencyKey, created);
         }
@@ -65,13 +68,40 @@ public class UserController {
 
     @PutMapping("/{id}")
     public ResponseEntity<UserResponse> update(@PathVariable UUID id,
-                                               @RequestBody @Valid UpdateUserRequest request) {
-        return ResponseEntity.ok(userService.update(id, request));
+                                               @RequestBody @Valid UpdateUserRequest request,
+                                               @AuthenticationPrincipal String actorId) {
+        return ResponseEntity.ok(userService.update(id, request, UUID.fromString(actorId)));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable UUID id) {
-        userService.delete(id);
+    public ResponseEntity<Void> delete(@PathVariable UUID id,
+                                       @AuthenticationPrincipal String actorId) {
+        userService.delete(id, UUID.fromString(actorId));
         return ResponseEntity.noContent().build();
+    }
+
+    // IA-5(1)(c): admin sets a temporary password — user must change it on next login
+    @PostMapping("/{id}/reset-password")
+    @PreAuthorize("hasAuthority('PERM_usersEdit')")
+    public ResponseEntity<Void> adminResetPassword(@PathVariable UUID id,
+                                                   @RequestBody @Valid AdminResetPasswordRequest request,
+                                                   @AuthenticationPrincipal String actorId) {
+        userService.adminResetPassword(id, request, UUID.fromString(actorId));
+        return ResponseEntity.noContent().build();
+    }
+
+    // AC-7: admin endpoint to manually clear a temporary account lockout
+    @PostMapping("/{id}/unlock")
+    @PreAuthorize("hasAuthority('PERM_usersEdit')")
+    public ResponseEntity<Void> unlock(@PathVariable UUID id,
+                                       @AuthenticationPrincipal String actorId) {
+        userService.unlock(id, UUID.fromString(actorId));
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/lock-status")
+    @PreAuthorize("hasAuthority('PERM_usersView')")
+    public ResponseEntity<LockStatusResponse> getLockStatus(@PathVariable UUID id) {
+        return ResponseEntity.ok(userService.getLockStatus(id));
     }
 }

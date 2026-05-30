@@ -1,6 +1,7 @@
 package com.demo.app.iam.controller;
 
 import com.demo.app.iam.dto.CreateUserRequest;
+import com.demo.app.iam.dto.LockStatusResponse;
 import com.demo.app.iam.dto.PagedResponse;
 import com.demo.app.iam.dto.UpdateUserRequest;
 import com.demo.app.iam.dto.UserResponse;
@@ -65,7 +66,7 @@ class UserControllerTest {
         var request = new CreateUserRequest("Test User", "test@example.com", ROLE_ID, "pass123", "active");
         var userResponse = buildUserResponse();
 
-        when(userService.create(request)).thenReturn(userResponse);
+        when(userService.create(eq(request), any())).thenReturn(userResponse);
 
         var result = userController.create(request, null, null);
 
@@ -89,7 +90,7 @@ class UserControllerTest {
         assertThat(result.getStatusCode().value()).isEqualTo(200);
         assertThat(result.getHeaders().getFirst("X-Idempotent-Replayed")).isEqualTo("true");
         assertThat(result.getBody()).isEqualTo(cachedResponse);
-        verify(userService, never()).create(any());
+        verify(userService, never()).create(any(), any());
     }
 
     @Test
@@ -100,7 +101,7 @@ class UserControllerTest {
 
         when(idempotencyService.findCached(UUID.fromString(userId), "user", "mykey", UserResponse.class))
                 .thenReturn(Optional.empty());
-        when(userService.create(request)).thenReturn(userResponse);
+        when(userService.create(eq(request), any())).thenReturn(userResponse);
 
         var result = userController.create(request, userId, "mykey");
 
@@ -114,7 +115,7 @@ class UserControllerTest {
         var request = new CreateUserRequest("Test User", "test@example.com", ROLE_ID, "pass123", "active");
         var userResponse = buildUserResponse();
 
-        when(userService.create(request)).thenReturn(userResponse);
+        when(userService.create(eq(request), any())).thenReturn(userResponse);
 
         var result = userController.create(request, null, "some-key");
 
@@ -139,9 +140,9 @@ class UserControllerTest {
         var request = new UpdateUserRequest("Updated Name", ROLE_ID, "active");
         var userResponse = buildUserResponse();
 
-        when(userService.update(USER_ID, request)).thenReturn(userResponse);
+        when(userService.update(USER_ID, request, USER_ID)).thenReturn(userResponse);
 
-        var result = userController.update(USER_ID, request);
+        var result = userController.update(USER_ID, request, USER_ID.toString());
 
         assertThat(result.getStatusCode().value()).isEqualTo(200);
         assertThat(result.getBody()).isEqualTo(userResponse);
@@ -149,10 +150,33 @@ class UserControllerTest {
 
     @Test
     void delete_delegatesToService_returns204() {
-        var result = userController.delete(USER_ID);
+        var result = userController.delete(USER_ID, USER_ID.toString());
 
-        verify(userService).delete(USER_ID);
+        verify(userService).delete(USER_ID, USER_ID);
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void unlock_delegatesToService_returns204() {
+        var actorId = UUID.randomUUID().toString();
+
+        var result = userController.unlock(USER_ID, actorId);
+
+        verify(userService).unlock(USER_ID, UUID.fromString(actorId));
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void getLockStatus_returnsOk_withLockInfo() {
+        var lockStatus = new LockStatusResponse(true, java.time.Instant.now().plusSeconds(300), 5);
+        when(userService.getLockStatus(USER_ID)).thenReturn(lockStatus);
+
+        var result = userController.getLockStatus(USER_ID);
+
+        assertThat(result.getStatusCode().value()).isEqualTo(200);
+        assertThat(result.getBody()).isEqualTo(lockStatus);
+        assertThat(result.getBody().locked()).isTrue();
+        assertThat(result.getBody().failedAttempts()).isEqualTo(5);
     }
 
     @Test
@@ -168,5 +192,16 @@ class UserControllerTest {
         assertThat(body).hasSize(1);
         verify(userService).listByRoleName("Admin");
         verify(userService, never()).list(anyInt(), anyInt());
+    }
+
+    @Test
+    void adminResetPassword_delegatesToService_returns204() {
+        var actorId = UUID.randomUUID().toString();
+        var request = new com.demo.app.iam.dto.AdminResetPasswordRequest("TempPass1234!");
+
+        var result = userController.adminResetPassword(USER_ID, request, actorId);
+
+        verify(userService).adminResetPassword(USER_ID, request, UUID.fromString(actorId));
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
 }

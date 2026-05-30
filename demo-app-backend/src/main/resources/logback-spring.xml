@@ -85,6 +85,31 @@
     </appender>
 
     <!-- ============================================================= -->
+    <!-- AUDIT_FILE Appender (AU-6/SI-4: dedicated NDJSON audit log   -->
+    <!-- for SIEM agent ingestion via Filebeat / Fluent Bit / CW Agent)-->
+    <!-- ============================================================= -->
+    <appender name="AUDIT_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${AUDIT_LOG_PATH:-/app/logs}/audit-events.json.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${AUDIT_LOG_PATH:-/app/logs}/audit-events.%d{yyyy-MM-dd}.json.log.gz</fileNamePattern>
+            <maxHistory>90</maxHistory>
+            <totalSizeCap>5GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"application":"${APP_NAME}","log_type":"audit"}</customFields>
+            <includeMdcKeyName>requestId</includeMdcKeyName>
+            <includeMdcKeyName>userId</includeMdcKeyName>
+            <includeMdcKeyName>sessionId</includeMdcKeyName>
+            <includeMdcKeyName>clientIp</includeMdcKeyName>
+            <fieldNames>
+                <timestamp>occurred_at</timestamp>
+                <levelValue>[ignore]</levelValue>
+                <version>[ignore]</version>
+            </fieldNames>
+        </encoder>
+    </appender>
+
+    <!-- ============================================================= -->
     <!-- Profile-specific configuration                                 -->
     <!-- ============================================================= -->
 
@@ -95,13 +120,17 @@
         </logger>
         <logger name="org.springframework.security" level="DEBUG"/>
         <logger name="org.hibernate.SQL" level="DEBUG"/>
+        <!-- AU-6: audit events to console in dev (no file needed) -->
+        <logger name="AUDIT" level="INFO" additivity="false">
+            <appender-ref ref="CONSOLE"/>
+        </logger>
 
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
         </root>
     </springProfile>
 
-    <!-- PROD profile: structured JSON to Logstash TCP + JSON to stdout -->
+    <!-- PROD profile: structured JSON to Logstash TCP + JSON to stdout; audit to dedicated file + Logstash -->
     <springProfile name="prod">
         <logger name="com.demo" level="INFO" additivity="false">
             <appender-ref ref="LOGSTASH"/>
@@ -110,6 +139,11 @@
         <logger name="org.springframework.security" level="WARN"/>
         <logger name="org.hibernate.SQL" level="WARN"/>
         <logger name="org.hibernate.type.descriptor.sql" level="WARN"/>
+        <!-- AU-6/SI-4: audit events go to dedicated NDJSON file AND Logstash (SIEM) -->
+        <logger name="AUDIT" level="INFO" additivity="false">
+            <appender-ref ref="AUDIT_FILE"/>
+            <appender-ref ref="LOGSTASH"/>
+        </logger>
 
         <root level="WARN">
             <appender-ref ref="LOGSTASH"/>
@@ -117,10 +151,14 @@
         </root>
     </springProfile>
 
-    <!-- DEFAULT (no profile active): console output like dev -->
+    <!-- DEFAULT (no profile active): console output; audit file for non-dev non-prod -->
     <springProfile name="default">
         <logger name="com.demo" level="INFO" additivity="false">
             <appender-ref ref="CONSOLE"/>
+        </logger>
+        <!-- AU-6: audit to file in all non-dev environments -->
+        <logger name="AUDIT" level="INFO" additivity="false">
+            <appender-ref ref="AUDIT_FILE"/>
         </logger>
 
         <root level="INFO">

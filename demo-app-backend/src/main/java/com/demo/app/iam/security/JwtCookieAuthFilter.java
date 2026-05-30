@@ -3,6 +3,7 @@ package com.demo.app.iam.security;
 import com.demo.app.iam.service.SessionActivityService;
 import com.demo.app.iam.service.TokenDenylistService;
 import com.demo.app.iam.service.JwtService;
+import com.demo.app.platform.metrics.SecurityEventRecorder;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -32,6 +33,7 @@ public class JwtCookieAuthFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final TokenDenylistService tokenDenylistService;
     private final SessionActivityService sessionActivityService;
+    private final SecurityEventRecorder securityEventRecorder;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -46,6 +48,7 @@ public class JwtCookieAuthFilter extends OncePerRequestFilter {
                 // AC-12: reject explicitly revoked tokens
                 if (jti != null && tokenDenylistService.isDenied(jti)) {
                     log.debug("Denied token jti={}", jti);
+                    securityEventRecorder.recordTokenDenied();
                     chain.doFilter(request, response);
                     return;
                 }
@@ -53,6 +56,7 @@ public class JwtCookieAuthFilter extends OncePerRequestFilter {
                 // AC-11: reject idle sessions (no activity within configured timeout)
                 if (jti != null && sessionActivityService.isIdle(jti)) {
                     log.debug("Idle session jti={}", jti);
+                    securityEventRecorder.recordSessionIdle();
                     tokenDenylistService.deny(jti, claims.getExpiration().toInstant());
                     try {
                         sessionActivityService.deregister(jti, java.util.UUID.fromString(claims.getSubject()));

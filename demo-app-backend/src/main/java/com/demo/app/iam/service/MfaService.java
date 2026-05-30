@@ -1,5 +1,6 @@
 package com.demo.app.iam.service;
 
+import com.demo.app.compliance.service.AuditService;
 import com.demo.app.iam.entity.Credential;
 import com.demo.app.iam.entity.MfaPendingSession;
 import com.demo.app.iam.entity.User;
@@ -8,6 +9,7 @@ import com.demo.app.iam.repository.MfaPendingSessionRepository;
 import com.demo.app.iam.repository.UserRepository;
 import com.demo.app.platform.exception.ForbiddenException;
 import com.demo.app.platform.exception.ResourceNotFoundException;
+import com.demo.app.platform.metrics.SecurityEventRecorder;
 import dev.samstevens.totp.code.*;
 import dev.samstevens.totp.qr.QrData;
 import dev.samstevens.totp.qr.QrGenerator;
@@ -16,6 +18,7 @@ import dev.samstevens.totp.secret.DefaultSecretGenerator;
 import dev.samstevens.totp.time.SystemTimeProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -36,19 +40,31 @@ import static dev.samstevens.totp.util.Utils.getDataUriForImage;
 @Slf4j
 public class MfaService {
 
-    private static final int CHALLENGE_TTL_SECONDS = 300;
-    private static final int ENROLL_TTL_SECONDS    = 600; // 10 minutes to scan QR + confirm
-    private static final String ENROLL_PREFIX      = "mfa:enroll:";
+    private static final int    CHALLENGE_TTL_SECONDS  = 300;
+    private static final int    ENROLL_TTL_SECONDS     = 600; // 10 minutes to scan QR + confirm
+    private static final int    TOTP_USED_TTL_SECONDS  = 90;  // IA-2(8): covers ±1 TOTP time step
+    private static final String ENROLL_PREFIX          = "mfa:enroll:";
+    private static final String TOTP_USED_PREFIX       = "mfa:used:";
+    private static final String MFA_FAIL_PREFIX        = "mfa:fail:";
+
+    @Value("${app.mfa.max-failures:5}")
+    private int mfaMaxFailures = 5;
+
+    @Value("${app.mfa.lockout-seconds:900}")
+    private int mfaLockoutSeconds = 900;
 
     private final CredentialRepository credentialRepository;
     private final MfaPendingSessionRepository pendingSessionRepository;
     private final UserRepository userRepository;
     private final StringRedisTemplate redisTemplate;
     private final PasswordEncoder passwordEncoder;
+    private final AuditService auditService;
+    private final SecurityEventRecorder securityEventRecorder;
 
     private final DefaultSecretGenerator secretGenerator = new DefaultSecretGenerator(32);
     private final CodeGenerator  codeGenerator = new DefaultCodeGenerator(HashingAlgorithm.SHA1);
     private final CodeVerifier   codeVerifier  = new DefaultCodeVerifier(codeGenerator, new SystemTimeProvider());
+    private final SecureRandom   secureRandom  = new SecureRandom();
 
     // --- Setup ---
 
@@ -91,12 +107,21 @@ public class MfaService {
         if (!codeVerifier.isValidCode(credential.getMfaSecret(), totpCode)) {
             throw new ForbiddenException("Invalid TOTP code");
         }
+        if (isCodeAlreadyUsed(userId, totpCode)) {
+            auditService.log(userId, "MFA_REPLAY_ATTEMPT", "User", userId, null, null, "failure");
+            securityEventRecorder.recordMfaReplayAttempt();
+            throw new ForbiddenException("MFA code already used");
+        }
+        markCodeUsed(userId, totpCode);
         var backupCodes = generateBackupCodes();
         credential.setMfaEnabled(true);
         credential.setMfaMethod("TOTP");
         credential.setMfaEnrolledAt(Instant.now());
         credential.setMfaBackupCodes(backupCodes.stream().map(this::hashBackupCode).toList());
         credentialRepository.save(credential);
+        // AU-2: MFA enrollment is a security-critical event — record who enrolled and when
+        auditService.log(userId, "MFA_ENROLLED", "User", userId, null, null, "success");
+        securityEventRecorder.recordMfaEnrolled();
         return backupCodes; // return plaintext once — never stored
     }
 
@@ -109,11 +134,19 @@ public class MfaService {
         if (!codeVerifier.isValidCode(credential.getMfaSecret(), totpCode)) {
             throw new ForbiddenException("Invalid TOTP code");
         }
+        if (isCodeAlreadyUsed(userId, totpCode)) {
+            auditService.log(userId, "MFA_REPLAY_ATTEMPT", "User", userId, null, null, "failure");
+            securityEventRecorder.recordMfaReplayAttempt();
+            throw new ForbiddenException("MFA code already used");
+        }
+        markCodeUsed(userId, totpCode);
         credential.setMfaEnabled(false);
         credential.setMfaSecret(null);
         credential.setMfaEnrolledAt(null);
         credential.setMfaBackupCodes(null);
         credentialRepository.save(credential);
+        auditService.log(userId, "MFA_DISABLED", "User", userId, null, null, "success");
+        securityEventRecorder.recordMfaDisabled();
     }
 
     // --- Enrollment-from-login (IA-2 hard-block) ---
@@ -183,20 +216,68 @@ public class MfaService {
 
         // Try TOTP first
         if (codeVerifier.isValidCode(credential.getMfaSecret(), code)) {
+            if (isCodeAlreadyUsed(session.getUserId(), code)) {
+                auditService.log(session.getUserId(), "MFA_REPLAY_ATTEMPT", "User", session.getUserId(), null, null, "failure");
+                securityEventRecorder.recordMfaReplayAttempt();
+                throw new ForbiddenException("MFA code already used");
+            }
+            markCodeUsed(session.getUserId(), code);
+            clearMfaFailures(session.getUserId());
             pendingSessionRepository.delete(session);
             return session.getUserId();
         }
 
         // Try backup code
         if (verifyAndConsumeBackupCode(credential, code)) {
+            clearMfaFailures(session.getUserId());
             pendingSessionRepository.delete(session);
+            auditService.log(session.getUserId(), "MFA_BACKUP_CODE_USED", "User", session.getUserId(), null, null, "success");
+            securityEventRecorder.recordMfaBackupCodeUsed();
             return session.getUserId();
+        }
+
+        auditService.log(session.getUserId(), "MFA_VERIFY_FAILED", "User", session.getUserId(), null, null, "failure");
+        securityEventRecorder.recordMfaVerifyFailed();
+
+        // AC-7: lock account after repeated MFA failures to prevent brute-force
+        var failCount = incrementMfaFailures(session.getUserId());
+        if (failCount >= mfaMaxFailures) {
+            credential.setLockedUntil(Instant.now().plusSeconds(mfaLockoutSeconds));
+            credentialRepository.save(credential);
+            auditService.log(session.getUserId(), "MFA_LOCKOUT", "User", session.getUserId(), null,
+                    Map.of("attempts", String.valueOf(failCount)), "failure");
+            securityEventRecorder.recordMfaLockout();
         }
 
         throw new ForbiddenException("Invalid MFA code");
     }
 
     // --- Helpers ---
+
+    // IA-2(8): prevent replay of a TOTP code within its validity window
+    private boolean isCodeAlreadyUsed(UUID userId, String code) {
+        return Boolean.TRUE.equals(redisTemplate.hasKey(TOTP_USED_PREFIX + userId + ":" + code));
+    }
+
+    private void markCodeUsed(UUID userId, String code) {
+        redisTemplate.opsForValue().set(TOTP_USED_PREFIX + userId + ":" + code,
+                "1", Duration.ofSeconds(TOTP_USED_TTL_SECONDS));
+    }
+
+    // AC-7: sliding failure window per user; key expires when the lockout window resets
+    private long incrementMfaFailures(UUID userId) {
+        var key = MFA_FAIL_PREFIX + userId;
+        var raw = redisTemplate.opsForValue().increment(key);
+        long failCount = (raw != null) ? raw : 1L;
+        if (failCount == 1L) {
+            redisTemplate.expire(key, Duration.ofSeconds(mfaLockoutSeconds));
+        }
+        return failCount;
+    }
+
+    private void clearMfaFailures(UUID userId) {
+        redisTemplate.delete(MFA_FAIL_PREFIX + userId);
+    }
 
     private boolean verifyAndConsumeBackupCode(Credential credential, String code) {
         var hashed = hashBackupCode(code.toUpperCase());
@@ -210,11 +291,11 @@ public class MfaService {
     }
 
     private List<String> generateBackupCodes() {
-        var rand = new Random(System.currentTimeMillis());
+        // SC-13: 10 bytes (80-bit entropy) via CSPRNG — meets NIST SP 800-63B requirements
         return IntStream.range(0, 10)
                 .mapToObj(i -> {
-                    var bytes = new byte[5];
-                    rand.nextBytes(bytes);
+                    var bytes = new byte[10];
+                    secureRandom.nextBytes(bytes);
                     return HexFormat.of().formatHex(bytes).toUpperCase();
                 })
                 .toList();

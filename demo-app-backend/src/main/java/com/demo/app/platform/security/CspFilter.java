@@ -12,7 +12,7 @@ import java.security.SecureRandom;
 import java.util.Base64;
 
 /**
- * Sets per-request Content Security Policy headers (SC-7, SC-28).
+ * Sets per-request security response headers (SC-7, SC-8(1), SC-18, SC-28).
  * script-src intentionally omits 'unsafe-inline' — all JS must be from 'self'.
  * style-src retains 'unsafe-inline' because Angular Material injects component styles at runtime.
  */
@@ -45,6 +45,21 @@ public class CspFilter extends OncePerRequestFilter {
         response.setHeader("X-Content-Type-Options", "nosniff");
         response.setHeader("X-Frame-Options", "DENY");
         response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+
+        // SC-8(1): force HTTPS for 1 year; prevents protocol-downgrade and MITM attacks
+        response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+
+        // SC-7 / SC-18: restrict browser feature APIs with no business use in this application
+        response.setHeader("Permissions-Policy",
+                "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()");
+
+        // SC-7: prevents cross-origin window handle sharing (clickjacking variant via opener)
+        response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+
+        // SC-28: prevent browsers from caching sensitive API responses (tokens, user data, PII)
+        if (request.getRequestURI().startsWith("/api/")) {
+            response.setHeader("Cache-Control", "no-store, max-age=0");
+        }
 
         chain.doFilter(request, response);
     }

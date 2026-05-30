@@ -65,4 +65,15 @@ public class SessionActivityService {
     public void remove(String jti) {
         redisTemplate.delete(PREFIX + jti);
     }
+
+    /** Return all jtis currently registered for a user, without pruning expired ones. */
+    public Set<String> getSessionJtis(UUID userId) {
+        Set<String> members = redisTemplate.opsForSet().members(USER_SESSIONS_PREFIX + userId);
+        return members != null ? members : Set.of();
+    }
+
+    /** Delete the user's session-set key (call after removing individual activity keys). */
+    public void clearUserSessions(UUID userId) {
+        redisTemplate.delete(USER_SESSIONS_PREFIX + userId);
+    }
 }

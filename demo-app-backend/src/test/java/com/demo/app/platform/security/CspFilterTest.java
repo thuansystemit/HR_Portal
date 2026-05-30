@@ -55,6 +55,61 @@ class CspFilterTest {
     }
 
     @Test
+    void doFilterInternal_setsHsts_withOneYearMaxAge() throws Exception {
+        var response = new MockHttpServletResponse();
+
+        filter.doFilter(new MockHttpServletRequest(), response, new MockFilterChain());
+
+        assertThat(response.getHeader("Strict-Transport-Security"))
+                .isEqualTo("max-age=31536000; includeSubDomains");
+    }
+
+    @Test
+    void doFilterInternal_setsPermissionsPolicy_restrictingAllFeatures() throws Exception {
+        var response = new MockHttpServletResponse();
+
+        filter.doFilter(new MockHttpServletRequest(), response, new MockFilterChain());
+
+        String pp = response.getHeader("Permissions-Policy");
+        assertThat(pp).isNotNull();
+        assertThat(pp).contains("camera=()");
+        assertThat(pp).contains("microphone=()");
+        assertThat(pp).contains("geolocation=()");
+        assertThat(pp).contains("payment=()");
+    }
+
+    @Test
+    void doFilterInternal_setsCrossOriginOpenerPolicy() throws Exception {
+        var response = new MockHttpServletResponse();
+
+        filter.doFilter(new MockHttpServletRequest(), response, new MockFilterChain());
+
+        assertThat(response.getHeader("Cross-Origin-Opener-Policy")).isEqualTo("same-origin");
+    }
+
+    @Test
+    void doFilterInternal_setsCacheControlNoStore_forApiPaths() throws Exception {
+        var request = new MockHttpServletRequest();
+        request.setRequestURI("/api/v1/users");
+        var response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertThat(response.getHeader("Cache-Control")).isEqualTo("no-store, max-age=0");
+    }
+
+    @Test
+    void doFilterInternal_doesNotSetCacheControl_forNonApiPaths() throws Exception {
+        var request = new MockHttpServletRequest();
+        request.setRequestURI("/static/app.js");
+        var response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertThat(response.getHeader("Cache-Control")).isNull();
+    }
+
+    @Test
     void doFilterInternal_proceedsThroughChain() throws Exception {
         var request  = new MockHttpServletRequest();
         var response = new MockHttpServletResponse();

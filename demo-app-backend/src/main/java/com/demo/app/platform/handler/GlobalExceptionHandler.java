@@ -50,6 +50,13 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of("WRONG_PASSWORD", ex.getMessage()));
     }
 
+    @ExceptionHandler(com.demo.app.platform.exception.PasswordPolicyException.class)
+    public ResponseEntity<ErrorResponse> handlePasswordPolicy(
+            com.demo.app.platform.exception.PasswordPolicyException ex) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.ofPasswordPolicy(ex.getViolations()));
+    }
+
     @ExceptionHandler(ForbiddenException.class)
     public ResponseEntity<ErrorResponse> handleForbidden(ForbiddenException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)

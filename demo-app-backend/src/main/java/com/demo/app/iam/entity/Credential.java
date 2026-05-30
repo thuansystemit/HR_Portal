@@ -1,5 +1,6 @@
 package com.demo.app.iam.entity;
 
+import com.demo.app.platform.security.encryption.PiiEncryptionConverter;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -34,6 +35,8 @@ public class Credential {
     @Column(nullable = false)
     private boolean mfaEnabled = false;
 
+    // SC-28: TOTP secret encrypted at rest; PiiEncryptionConverter applies AES-256-GCM
+    @Convert(converter = PiiEncryptionConverter.class)
     private String mfaSecret;
 
     @Column(length = 20)
@@ -45,6 +48,20 @@ public class Credential {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "mfa_backup_codes", columnDefinition = "jsonb")
     private List<String> mfaBackupCodes;
+
+    private Instant previousLoginAt;
+
+    private Instant lastLoginAt;
+
+    // IA-5(1)(d): timestamp when the password was last set — used to enforce max-age rotation
+    @Builder.Default
+    @Column(nullable = false)
+    private Instant passwordChangedAt = Instant.now();
+
+    // IA-5(1)(f): admin-provisioned accounts must change their initial password on first login
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean mustChangePassword = false;
 
     @Builder.Default
     @Column(nullable = false)

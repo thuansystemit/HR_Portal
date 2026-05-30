@@ -1,6 +1,7 @@
 package com.demo.app.content.service;
 
 import com.demo.app.compliance.service.AuditService;
+import com.demo.app.platform.metrics.SecurityEventRecorder;
 import com.demo.app.content.dto.DocumentResponse;
 import com.demo.app.content.dto.DownloadResult;
 import com.demo.app.content.entity.Document;
@@ -42,6 +43,7 @@ public class DocumentService {
     private final UserRepository userRepository;
     private final MalwareScanService malwareScanService;
     private final AuditService auditService;
+    private final SecurityEventRecorder securityEventRecorder;
 
     @Value("${app.malware.scan.fail-open:false}")
     private boolean failOpen;
@@ -114,11 +116,13 @@ public class DocumentService {
         return switch (result.status()) {
             case CLEAN -> "CLEAN";
             case INFECTED -> {
+                securityEventRecorder.recordMalwareBlocked();
                 auditService.log(uploadedBy, "DOCUMENT_MALWARE_BLOCKED", "DocumentCategory", categoryId,
                         null, Map.of("filename", filename, "threat", String.valueOf(result.detail())), "blocked");
                 throw new MalwareDetectedException(result.detail() != null ? result.detail() : "unknown threat");
             }
             case ERROR -> {
+                securityEventRecorder.recordMalwareScanError();
                 log.error("Malware scan error for '{}': {}", filename, result.detail());
                 if (!failOpen) {
                     throw new IllegalStateException(

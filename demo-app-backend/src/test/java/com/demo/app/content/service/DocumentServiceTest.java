@@ -10,6 +10,7 @@ import com.demo.app.iam.repository.UserRepository;
 import com.demo.app.insights.service.ReportService;
 import com.demo.app.platform.exception.MalwareDetectedException;
 import com.demo.app.platform.exception.ResourceNotFoundException;
+import com.demo.app.platform.metrics.SecurityEventRecorder;
 import com.demo.app.platform.security.malware.MalwareScanService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,6 +47,7 @@ class DocumentServiceTest {
     @Mock UserRepository userRepository;
     @Mock MalwareScanService malwareScanService;
     @Mock AuditService auditService;
+    @Mock SecurityEventRecorder securityEventRecorder;
 
     @InjectMocks
     DocumentService documentService;

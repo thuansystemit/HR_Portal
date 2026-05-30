@@ -107,6 +107,9 @@ public class CvCandidate {
     @Column(nullable = false)
     private Instant updatedAt;
 
+    // SI-12: set when PII fields are anonymised after the retention window expires
+    private Instant anonymizedAt;
+
     @PrePersist
     void onCreate() { this.updatedAt = Instant.now(); }
 

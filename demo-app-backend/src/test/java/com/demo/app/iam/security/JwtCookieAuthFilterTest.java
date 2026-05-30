@@ -3,6 +3,7 @@ package com.demo.app.iam.security;
 import com.demo.app.iam.service.JwtService;
 import com.demo.app.iam.service.SessionActivityService;
 import com.demo.app.iam.service.TokenDenylistService;
+import com.demo.app.platform.metrics.SecurityEventRecorder;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.impl.DefaultClaims;
 import jakarta.servlet.FilterChain;
@@ -36,6 +37,7 @@ class JwtCookieAuthFilterTest {
     @Mock JwtService jwtService;
     @Mock TokenDenylistService tokenDenylistService;
     @Mock SessionActivityService sessionActivityService;
+    @Mock SecurityEventRecorder securityEventRecorder;
 
     @InjectMocks
     JwtCookieAuthFilter filter;

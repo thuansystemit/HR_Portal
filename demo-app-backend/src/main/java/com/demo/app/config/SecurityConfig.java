@@ -2,6 +2,7 @@ package com.demo.app.config;
 
 import com.demo.app.iam.security.InternalApiKeyFilter;
 import com.demo.app.iam.security.JwtCookieAuthFilter;
+import com.demo.app.iam.security.RateLimitFilter;
 import com.demo.app.platform.logging.MdcUserFilter;
 import com.demo.app.platform.security.CspFilter;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,7 @@ public class SecurityConfig {
     private final CorsConfigurationSource corsConfigurationSource;
     private final MdcUserFilter mdcUserFilter;
     private final CspFilter cspFilter;
+    private final RateLimitFilter rateLimitFilter;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -49,12 +51,15 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/auth/banner").permitAll()
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers("/actuator/health/**").permitAll()
+                // CM-7: restrict log-level mutation to users with analytics/admin permission only
+                .requestMatchers("/actuator/loggers/**").hasAuthority("PERM_analyticsView")
                 .requestMatchers(HttpMethod.POST, "/api/v1/knowledge/ingest").hasRole("SERVICE")
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
             )
+            .addFilterBefore(rateLimitFilter, CspFilter.class)
             .addFilterBefore(cspFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(internalApiKeyFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtCookieAuthFilter, UsernamePasswordAuthenticationFilter.class)
