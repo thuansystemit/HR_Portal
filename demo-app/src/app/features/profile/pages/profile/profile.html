@@ -19,19 +19,6 @@
           {{ auth.user()?.roleName }}
         </span>
 
-        <hr class="my-4" />
-
-        <div class="d-flex flex-column gap-2 text-start">
-          <div class="d-flex justify-content-between small">
-            <span class="text-muted">Role ID</span>
-            <span class="fw-medium">#{{ auth.user()?.roleId }}</span>
-          </div>
-          <div class="d-flex justify-content-between small">
-            <span class="text-muted">User ID</span>
-            <span class="fw-medium">#{{ auth.user()?.id }}</span>
-          </div>
-        </div>
-
         <div class="mt-4">
           <app-btn variant="outline-danger" size="sm" icon="bi-box-arrow-right" [block]="true" (btnClick)="auth.logout()">
             Logout
