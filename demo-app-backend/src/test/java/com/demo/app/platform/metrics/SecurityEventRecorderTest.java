@@ -42,6 +42,12 @@ class SecurityEventRecorderTest {
         assertThat(registry.find("security.mfa.backup.code.used").counter()).isNotNull();
         assertThat(registry.find("security.mfa.replay.attempt").counter()).isNotNull();
         assertThat(registry.find("security.mfa.lockout").counter()).isNotNull();
+        assertThat(registry.find("security.access.outside.hours").counter()).isNotNull();
+        assertThat(registry.find("security.session.ip.mismatch").counter()).isNotNull();
+        assertThat(registry.find("security.anomaly.detected").counter()).isNotNull();
+        assertThat(registry.find("security.backup.verification.failed").counter()).isNotNull();
+        assertThat(registry.find("security.integrity.violation").counter()).isNotNull();
+        assertThat(registry.find("security.incident.raised").counter()).isNotNull();
     }
 
     @Test
@@ -181,6 +187,42 @@ class SecurityEventRecorderTest {
     void recordMfaLockout_incrementsCounter() {
         recorder.recordMfaLockout();
         assertSimpleCount("security.mfa.lockout", 1.0);
+    }
+
+    @Test
+    void recordAccessOutsideHours_incrementsCounter() {
+        recorder.recordAccessOutsideHours();
+        assertSimpleCount("security.access.outside.hours", 1.0);
+    }
+
+    @Test
+    void recordSessionIpMismatch_incrementsCounter() {
+        recorder.recordSessionIpMismatch();
+        assertSimpleCount("security.session.ip.mismatch", 1.0);
+    }
+
+    @Test
+    void recordAnomalyDetected_incrementsCounter() {
+        recorder.recordAnomalyDetected();
+        assertSimpleCount("security.anomaly.detected", 1.0);
+    }
+
+    @Test
+    void recordBackupVerificationFailed_incrementsCounter() {
+        recorder.recordBackupVerificationFailed();
+        assertSimpleCount("security.backup.verification.failed", 1.0);
+    }
+
+    @Test
+    void recordIntegrityViolation_incrementsCounter() {
+        recorder.recordIntegrityViolation();
+        assertSimpleCount("security.integrity.violation", 1.0);
+    }
+
+    @Test
+    void recordIncidentRaised_incrementsCounter() {
+        recorder.recordIncidentRaised();
+        assertSimpleCount("security.incident.raised", 1.0);
     }
 
     private void assertCount(String name, String tagKey, String tagValue, double expected) {

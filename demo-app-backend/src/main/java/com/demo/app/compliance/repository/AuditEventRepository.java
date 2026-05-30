@@ -68,6 +68,10 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent, UUID> {
             @Param("entityType") String entityType,
             Pageable pageable);
 
+    // IR-5: count recent events of a given type — used by anomaly detector to check threshold breaches
+    @Query("SELECT COUNT(e) FROM AuditEvent e WHERE e.action = :action AND e.occurredAt >= :since")
+    long countByActionSince(@Param("action") String action, @Param("since") Instant since);
+
     // AU-11: used only by AuditRetentionService inside a maintenance transaction (SET LOCAL app.audit_maintenance = 'true')
     @Modifying
     @Query("DELETE FROM AuditEvent e WHERE e.occurredAt < :cutoff")

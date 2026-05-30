@@ -37,6 +37,27 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
+        <!-- IA-2(12)/IA-8(2): SAML2 SP for PIV/CAC smart card + login.gov federation -->
+        <!-- Exclude non-FIPS BouncyCastle jars pulled in by OpenSAML — bc-fips is already on
+             the classpath and the JVM rejects two differently-signed jars in the same package. -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-saml2-service-provider</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-jdk18on</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcpkix-jdk18on</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcutil-jdk18on</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
         <!-- JPA -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -166,6 +187,16 @@
             <version>1.7.1</version>
         </dependency>
     </dependencies>
+
+    <!-- OpenSAML is published to the Shibboleth repository, not Maven Central -->
+    <repositories>
+        <repository>
+            <id>shibboleth</id>
+            <url>https://build.shibboleth.net/maven/releases/</url>
+            <releases><enabled>true</enabled></releases>
+            <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+    </repositories>
 
     <build>
         <plugins>
