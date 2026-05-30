@@ -25,9 +25,20 @@ jobs:
           java-version: 21
           cache: maven
 
+      - name: Cache NVD database
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/OWASP/dependency-check
+          key: nvd-db-${{ hashFiles('demo-app-backend/pom.xml') }}
+          restore-keys: nvd-db-
+
       - name: OWASP Dependency-Check
         working-directory: demo-app-backend
-        run: mvn dependency-check:check -DnvdApiKey=${{ secrets.NVD_API_KEY }} -DfailBuildOnCVSS=7
+        run: |
+          mvn dependency-check:check \
+            -DnvdApiKey=${{ secrets.NVD_API_KEY }} \
+            -DnvdApiDelay=4000 \
+            -DfailBuildOnCVSS=7
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
 
