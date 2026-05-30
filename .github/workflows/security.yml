@@ -7,6 +7,10 @@ on:
   schedule:
     - cron: '0 6 * * 1'   # Weekly Monday 6 AM UTC (RA-5 continuous monitoring)
 
+# Least-privilege defaults — individual jobs escalate only what they need.
+permissions:
+  contents: read
+
 jobs:
   # ── SCA: Dependency vulnerabilities (RA-5, SI-2) ─────────────────────────
   sca:
@@ -39,6 +43,9 @@ jobs:
   sast:
     name: SAST (Semgrep)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # required to upload SARIF to GitHub Security tab
     container:
       image: semgrep/semgrep
     steps:
@@ -61,12 +68,16 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: semgrep.sarif
-        if: always()
+        # Fork PRs cannot write security-events — skip upload rather than fail the run
+        if: always() && github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
   # ── Container scanning (SI-2) ────────────────────────────────────────────
   container-scan:
     name: Container Scan (Trivy)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # required to upload SARIF to GitHub Security tab
     steps:
       - uses: actions/checkout@v4
 
@@ -97,7 +108,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy.sarif
-        if: always()
+        if: always() && github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
   # ── Frontend dependency audit ─────────────────────────────────────────────
   frontend-audit:
