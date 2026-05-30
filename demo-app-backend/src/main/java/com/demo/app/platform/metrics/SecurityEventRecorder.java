@@ -34,6 +34,12 @@ public class SecurityEventRecorder {
     private final Counter mfaBackupCodeUsed;
     private final Counter mfaReplayAttempt;
     private final Counter mfaLockout;
+    private final Counter accessOutsideHours;
+    private final Counter sessionIpMismatch;
+    private final Counter anomalyDetected;
+    private final Counter backupVerificationFailed;
+    private final Counter integrityViolation;
+    private final Counter incidentRaised;
 
     public SecurityEventRecorder(MeterRegistry registry) {
         loginSuccess = Counter.builder("security.auth.attempt")
@@ -108,6 +114,24 @@ public class SecurityEventRecorder {
         mfaLockout = Counter.builder("security.mfa.lockout")
                 .description("Accounts locked after repeated MFA failures (AC-7)")
                 .register(registry);
+        accessOutsideHours = Counter.builder("security.access.outside.hours")
+                .description("Login attempts blocked outside the permitted UTC access window (AC-2(11))")
+                .register(registry);
+        sessionIpMismatch = Counter.builder("security.session.ip.mismatch")
+                .description("Refresh attempts rejected because client IP changed since token issuance (SC-23)")
+                .register(registry);
+        anomalyDetected = Counter.builder("security.anomaly.detected")
+                .description("Security anomaly threshold breaches detected by the anomaly detector (IR-5)")
+                .register(registry);
+        backupVerificationFailed = Counter.builder("security.backup.verification.failed")
+                .description("CP-9 backup verification failures — manifest missing or stale")
+                .register(registry);
+        integrityViolation = Counter.builder("security.integrity.violation")
+                .description("SI-7 file integrity violations — hash mismatch or missing file at startup")
+                .register(registry);
+        incidentRaised = Counter.builder("security.incident.raised")
+                .description("IR-4/IR-6 incidents raised — anomaly burst threshold breached")
+                .register(registry);
     }
 
     public void recordLoginSuccess()            { loginSuccess.increment(); }
@@ -132,4 +156,10 @@ public class SecurityEventRecorder {
     public void recordMfaBackupCodeUsed()            { mfaBackupCodeUsed.increment(); }
     public void recordMfaReplayAttempt()             { mfaReplayAttempt.increment(); }
     public void recordMfaLockout()                   { mfaLockout.increment(); }
+    public void recordAccessOutsideHours()           { accessOutsideHours.increment(); }
+    public void recordSessionIpMismatch()            { sessionIpMismatch.increment(); }
+    public void recordAnomalyDetected()              { anomalyDetected.increment(); }
+    public void recordBackupVerificationFailed()    { backupVerificationFailed.increment(); }
+    public void recordIntegrityViolation()          { integrityViolation.increment(); }
+    public void recordIncidentRaised()              { incidentRaised.increment(); }
 }

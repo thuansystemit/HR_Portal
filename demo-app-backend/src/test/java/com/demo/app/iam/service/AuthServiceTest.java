@@ -36,6 +36,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -61,6 +62,7 @@ class AuthServiceTest {
     @Mock PasswordHistoryService passwordHistoryService;
     @Mock PasswordExpireService passwordExpireService;
     @Mock AuditService auditService;
+    @Mock AccessHoursEnforcer accessHoursEnforcer;
     @Mock HttpServletResponse httpResponse;
     @Mock HttpServletRequest httpRequest;
 
@@ -78,6 +80,7 @@ class AuthServiceTest {
         ReflectionTestUtils.setField(authService, "cookieSecure", false);
         ReflectionTestUtils.setField(authService, "passwordMaxAgeDays", 60);
         ReflectionTestUtils.setField(authService, "passwordMinAgeDays", 0); // disabled for most tests
+        ReflectionTestUtils.setField(authService, "ipBindingEnabled", false); // disabled for most tests
     }
 
     @Test
@@ -741,5 +744,204 @@ class AuthServiceTest {
 
         verify(credentialRepository).save(argThat(c ->
                 c.getFailedAttempts() == 5 && c.getLockedUntil() != null));
+    }
+
+    @Test
+    void issueTokensForUser_emitsLoginAuditEvent_withSessionDetails() {
+        // AU-2: logon event must appear in audit trail with jti, IP, and user-agent
+        var user = User.builder().id(USER_ID).email("a@b.com").fullName("Test").status("active").build();
+        var cred = Credential.builder().userId(USER_ID).passwordHash("$h")
+                .passwordChangedAt(Instant.now()).build();
+        var permSet = new PermissionCacheService.PermissionSet(UUID.randomUUID(), Set.of());
+
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cred));
+        when(permissionCacheService.loadPermissions(USER_ID)).thenReturn(permSet);
+        when(jwtService.generateAccessToken(any(), any(), any(), any())).thenReturn("jwt.token.here");
+        when(refreshTokenRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(sessionActivityService.countActiveSessions(USER_ID)).thenReturn(0);
+        when(httpRequest.getRemoteAddr()).thenReturn("10.0.0.1");
+        when(httpRequest.getHeader("User-Agent")).thenReturn("TestAgent/1.0");
+        when(roleRepository.findById(any())).thenReturn(Optional.empty());
+
+        authService.issueTokensForUser(USER_ID, httpRequest, httpResponse);
+
+        verify(auditService).log(eq(USER_ID), eq("USER_LOGGED_IN"), eq("User"), eq(USER_ID),
+                isNull(), argThat(m -> m.containsKey("jti") && "10.0.0.1".equals(m.get("ipAddress"))
+                        && "TestAgent/1.0".equals(m.get("userAgent"))), eq("success"));
+    }
+
+    @Test
+    void logout_emitsAuditEvent_whenValidAccessTokenPresent() {
+        // AU-2: logoff event must appear in audit trail with jti
+        String jti = UUID.randomUUID().toString();
+        Date expiry = new Date(System.currentTimeMillis() + 900_000L);
+        Claims claims = new DefaultClaims(Map.of("sub", USER_ID.toString(), "jti", jti, "exp", expiry));
+
+        when(httpRequest.getCookies()).thenReturn(new Cookie[]{
+                new Cookie("access-token", "valid.access")
+        });
+        when(jwtService.validateAndParse("valid.access")).thenReturn(claims);
+
+        authService.logout(httpRequest, httpResponse);
+
+        verify(auditService).log(eq(USER_ID), eq("USER_LOGGED_OUT"), eq("User"), eq(USER_ID),
+                isNull(), argThat(m -> jti.equals(m.get("jti"))), eq("success"));
+    }
+
+    @Test
+    void logout_doesNotEmitAuditEvent_whenNoCookies() {
+        // AU-2: no audit when session context is unavailable
+        when(httpRequest.getCookies()).thenReturn(null);
+
+        authService.logout(httpRequest, httpResponse);
+
+        verify(auditService, never()).log(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void login_callsAccessHoursEnforcer_afterSuccessfulCredentialValidation() {
+        // AC-2(11): enforcer must be called on every valid-credential login
+        var user = User.builder().id(USER_ID).email("a@b.com").status("active").fullName("Test").build();
+        var cred = Credential.builder().userId(USER_ID).passwordHash("$hash")
+                .failedAttempts(0).mfaEnabled(true).build();
+
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("a@b.com"))
+                .thenReturn(Optional.of(user));
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cred));
+        when(passwordEncoder.matches("pass123", "$hash")).thenReturn(true);
+        when(credentialRepository.save(any())).thenReturn(cred);
+        when(mfaService.createChallenge(USER_ID, "127.0.0.1")).thenReturn("challenge-token");
+
+        authService.login(new LoginRequest("a@b.com", "pass123"), httpResponse, "127.0.0.1", "ua");
+
+        verify(accessHoursEnforcer).enforce(USER_ID);
+    }
+
+    @Test
+    void refresh_succeedsWithSameIp_whenIpBindingEnabled() {
+        // SC-23: refresh from the same IP as issuance must succeed
+        ReflectionTestUtils.setField(authService, "ipBindingEnabled", true);
+        var raw = UUID.randomUUID().toString();
+        var hash = authService.sha256(raw);
+        var user = User.builder().id(USER_ID).email("a@b.com").fullName("Test").status("active").build();
+        var stored = RefreshToken.builder()
+                .tokenHash(hash).userId(USER_ID)
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .ipAddress("10.0.0.1").build();
+        var permSet = new PermissionCacheService.PermissionSet(UUID.randomUUID(), Set.of());
+
+        when(httpRequest.getCookies()).thenReturn(new Cookie[]{new Cookie("refresh-token", raw)});
+        when(httpRequest.getRemoteAddr()).thenReturn("10.0.0.1");
+        when(refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(hash)).thenReturn(Optional.of(stored));
+        when(refreshTokenRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
+        when(permissionCacheService.loadPermissions(USER_ID)).thenReturn(permSet);
+        when(jwtService.generateAccessToken(any(), any(), any(), any())).thenReturn("new.access.token");
+        when(roleRepository.findById(any())).thenReturn(Optional.empty());
+
+        var result = authService.refresh(httpRequest, httpResponse);
+
+        assertThat(result).isNotNull();
+        verify(securityEventRecorder, never()).recordSessionIpMismatch();
+    }
+
+    @Test
+    void refresh_throws_whenIpChanges_andIpBindingEnabled() {
+        // SC-23: refresh from a different IP must be rejected and the token revoked
+        ReflectionTestUtils.setField(authService, "ipBindingEnabled", true);
+        var raw = UUID.randomUUID().toString();
+        var hash = authService.sha256(raw);
+        var stored = RefreshToken.builder()
+                .tokenHash(hash).userId(USER_ID)
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .ipAddress("10.0.0.1").build();
+
+        when(httpRequest.getCookies()).thenReturn(new Cookie[]{new Cookie("refresh-token", raw)});
+        when(httpRequest.getRemoteAddr()).thenReturn("192.168.1.99");
+        when(refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(hash)).thenReturn(Optional.of(stored));
+        when(refreshTokenRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        assertThatThrownBy(() -> authService.refresh(httpRequest, httpResponse))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("IP address changed");
+
+        verify(refreshTokenRepository).save(argThat(t -> t.getRevokedAt() != null));
+        verify(auditService).log(eq(USER_ID), eq("SESSION_IP_MISMATCH"), eq("User"), eq(USER_ID),
+                isNull(), argThat(m -> "10.0.0.1".equals(m.get("storedIp")) && "192.168.1.99".equals(m.get("requestIp"))),
+                eq("failure"));
+        verify(securityEventRecorder).recordSessionIpMismatch();
+    }
+
+    @Test
+    void refresh_succeedsWithDifferentIp_whenIpBindingDisabled() {
+        // SC-23: binding is off by default — IP changes must not block refresh
+        var raw = UUID.randomUUID().toString();
+        var hash = authService.sha256(raw);
+        var user = User.builder().id(USER_ID).email("a@b.com").fullName("Test").status("active").build();
+        var stored = RefreshToken.builder()
+                .tokenHash(hash).userId(USER_ID)
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .ipAddress("10.0.0.1").build();
+        var permSet = new PermissionCacheService.PermissionSet(UUID.randomUUID(), Set.of());
+
+        when(httpRequest.getCookies()).thenReturn(new Cookie[]{new Cookie("refresh-token", raw)});
+        // getRemoteAddr is NOT called when binding is disabled — no stub needed
+        when(refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(hash)).thenReturn(Optional.of(stored));
+        when(refreshTokenRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
+        when(permissionCacheService.loadPermissions(USER_ID)).thenReturn(permSet);
+        when(jwtService.generateAccessToken(any(), any(), any(), any())).thenReturn("new.access.token");
+        when(roleRepository.findById(any())).thenReturn(Optional.empty());
+
+        assertThatCode(() -> authService.refresh(httpRequest, httpResponse)).doesNotThrowAnyException();
+        verify(securityEventRecorder, never()).recordSessionIpMismatch();
+    }
+
+    @Test
+    void refresh_skipsIpCheck_whenStoredIpIsNull() {
+        // SC-23: tokens without a stored IP (legacy rows) must be treated as if binding is satisfied
+        ReflectionTestUtils.setField(authService, "ipBindingEnabled", true);
+        var raw = UUID.randomUUID().toString();
+        var hash = authService.sha256(raw);
+        var user = User.builder().id(USER_ID).email("a@b.com").fullName("Test").status("active").build();
+        var stored = RefreshToken.builder()
+                .tokenHash(hash).userId(USER_ID)
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .ipAddress(null).build();
+        var permSet = new PermissionCacheService.PermissionSet(UUID.randomUUID(), Set.of());
+
+        when(httpRequest.getCookies()).thenReturn(new Cookie[]{new Cookie("refresh-token", raw)});
+        // getRemoteAddr is NOT called when storedIp is null — no stub needed
+        when(refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(hash)).thenReturn(Optional.of(stored));
+        when(refreshTokenRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(userRepository.findByIdAndDeletedAtIsNull(USER_ID)).thenReturn(Optional.of(user));
+        when(permissionCacheService.loadPermissions(USER_ID)).thenReturn(permSet);
+        when(jwtService.generateAccessToken(any(), any(), any(), any())).thenReturn("new.access.token");
+        when(roleRepository.findById(any())).thenReturn(Optional.empty());
+
+        assertThatCode(() -> authService.refresh(httpRequest, httpResponse)).doesNotThrowAnyException();
+        verify(securityEventRecorder, never()).recordSessionIpMismatch();
+    }
+
+    @Test
+    void login_throws_whenAccessHoursEnforcerDenies() {
+        // AC-2(11): ForbiddenException from enforcer must propagate to the caller
+        var user = User.builder().id(USER_ID).email("a@b.com").status("active").fullName("Test").build();
+        var cred = Credential.builder().userId(USER_ID).passwordHash("$hash")
+                .failedAttempts(0).mfaEnabled(true).build();
+
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("a@b.com"))
+                .thenReturn(Optional.of(user));
+        when(credentialRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cred));
+        when(passwordEncoder.matches("pass123", "$hash")).thenReturn(true);
+        when(credentialRepository.save(any())).thenReturn(cred);
+        doThrow(new ForbiddenException("Access not permitted outside allowed hours"))
+                .when(accessHoursEnforcer).enforce(USER_ID);
+
+        assertThatThrownBy(() -> authService.login(
+                new LoginRequest("a@b.com", "pass123"), httpResponse, "127.0.0.1", "ua"))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("outside allowed hours");
     }
 }

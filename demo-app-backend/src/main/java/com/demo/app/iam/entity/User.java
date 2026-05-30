@@ -1,5 +1,6 @@
 package com.demo.app.iam.entity;
 
+import com.demo.app.platform.security.encryption.PiiEncryptionConverter;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -16,7 +17,9 @@ public class User {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
-    @Column(nullable = false, length = 120)
+    // SC-28: full name is PII — encrypted at rest with AES-256-GCM
+    @Convert(converter = PiiEncryptionConverter.class)
+    @Column(nullable = false, length = 300)
     private String fullName;
 
     @Column(nullable = false, length = 254, unique = true)

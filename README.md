@@ -436,6 +436,80 @@ docker compose down -v
 
 ---
 
+## Rebuilding and Redeploying After Code Changes
+
+### Backend Java changes
+
+Re-build the JAR, then rebuild and restart only the `app` container:
+
+```bash
+cd demo-app-backend
+JAVA_HOME=/opt/tools/jdk-21.0.11/Contents/Home \
+MAVEN_HOME=/opt/tools/apache-maven-3.9.16 \
+$MAVEN_HOME/bin/mvn package -DskipTests
+
+docker compose up -d --build app
+```
+
+Flyway migrations run automatically on startup — new `V*.sql` files under `src/main/resources/db/migration/` are applied the moment the `app` container starts.
+
+### Frontend Angular changes
+
+The Angular dev server watches for file changes and hot-reloads automatically — no action needed while `npm start` is running.
+
+To pick up a dependency change (`package.json`):
+
+```bash
+cd demo-app
+npm install
+npm start
+```
+
+### CV extractor Python changes
+
+Rebuild and restart only the `cv-extractor` container:
+
+```bash
+cd demo-app-backend
+docker compose up -d --build cv-extractor
+```
+
+### Config / `.env` changes only (no code change)
+
+Restart the affected container without rebuilding the image:
+
+```bash
+cd demo-app-backend
+docker compose stop app
+docker compose up -d app
+```
+
+### Full stack rebuild (after pulling upstream changes)
+
+```bash
+cd demo-app-backend
+JAVA_HOME=/opt/tools/jdk-21.0.11/Contents/Home \
+MAVEN_HOME=/opt/tools/apache-maven-3.9.16 \
+$MAVEN_HOME/bin/mvn package -DskipTests
+
+docker compose up -d --build
+```
+
+### Verify a redeployment succeeded
+
+```bash
+# All containers should be "Up"
+docker compose ps
+
+# Wait for the Spring Boot startup banner
+docker compose logs -f app
+
+# Health endpoint should return {"status":"UP"}
+curl http://localhost:8080/actuator/health
+```
+
+---
+
 ## Troubleshooting
 
 **cv-extractor cannot reach Ollama**

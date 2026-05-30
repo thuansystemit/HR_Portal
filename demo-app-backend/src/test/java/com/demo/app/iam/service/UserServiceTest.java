@@ -664,4 +664,12 @@ class UserServiceTest {
         verify(passwordHistoryService).checkNotReused(USER_ID, "TempPass1234!");
         verify(passwordHistoryService).record(USER_ID, "$temp");
     }
+
+    @Test
+    void user_fullName_isAnnotatedWithPiiEncryptionConverter() throws NoSuchFieldException {
+        var field = com.demo.app.iam.entity.User.class.getDeclaredField("fullName");
+        var convert = field.getAnnotation(jakarta.persistence.Convert.class);
+        assertThat(convert).isNotNull();
+        assertThat(convert.converter()).isEqualTo(com.demo.app.platform.security.encryption.PiiEncryptionConverter.class);
+    }
 }

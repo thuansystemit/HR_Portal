@@ -29,6 +29,8 @@ import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -53,6 +55,7 @@ public class AuthService {
     private final PasswordHistoryService passwordHistoryService;
     private final PasswordExpireService passwordExpireService;
     private final AuditService auditService;
+    private final AccessHoursEnforcer accessHoursEnforcer;
 
     @Value("${app.cookie.secure:false}")
     private boolean cookieSecure;
@@ -65,6 +68,9 @@ public class AuthService {
 
     @Value("${app.session.max-concurrent:5}")
     private int maxConcurrentSessions;
+
+    @Value("${app.session.ip-binding.enabled:false}")
+    private boolean ipBindingEnabled;
 
     @Value("${app.password.max-age-days:60}")
     private int passwordMaxAgeDays = 60;
@@ -107,6 +113,9 @@ public class AuthService {
         credential.setLastLoginAt(Instant.now());
         credentialRepository.save(credential);
         securityEventRecorder.recordLoginSuccess();
+
+        // AC-2(11): deny logins outside the permitted UTC access window
+        accessHoursEnforcer.enforce(user.getId());
 
         // IA-2 hard-block: unenrolled users must complete MFA setup before getting tokens
         if (!credential.isMfaEnabled()) {
@@ -156,6 +165,12 @@ public class AuthService {
         setRefreshCookie(response, rawRefresh);
         sessionActivityService.register(jti, userId);
         securityEventRecorder.recordTokenIssued();
+        // AU-2: logon event with session identifiers — required by FedRAMP AU-2 baseline
+        auditService.log(userId, "USER_LOGGED_IN", "User", userId, null,
+                Map.of("jti", jti,
+                       "ipAddress", request.getRemoteAddr(),
+                       "userAgent", Objects.requireNonNullElse(request.getHeader("User-Agent"), "unknown")),
+                "success");
         return new AuthResponse(buildUserInfo(userId, permSet));
     }
 
@@ -173,6 +188,21 @@ public class AuthService {
             stored.setRevokedAt(Instant.now());
             refreshTokenRepository.save(stored);
             throw new ForbiddenException("Refresh token expired");
+        }
+
+        // SC-23: validate session authenticity — revoke and reject if IP changed since token was issued
+        if (ipBindingEnabled) {
+            var storedIp = stored.getIpAddress();
+            if (storedIp != null) {
+                if (!storedIp.equals(request.getRemoteAddr())) {
+                    stored.setRevokedAt(Instant.now());
+                    refreshTokenRepository.save(stored);
+                    auditService.log(stored.getUserId(), "SESSION_IP_MISMATCH", "User", stored.getUserId(), null,
+                            Map.of("storedIp", storedIp, "requestIp", request.getRemoteAddr()), "failure");
+                    securityEventRecorder.recordSessionIpMismatch();
+                    throw new ForbiddenException("Session IP address changed");
+                }
+            }
         }
 
         stored.setRevokedAt(Instant.now());
@@ -207,8 +237,12 @@ public class AuthService {
                 var claims = jwtService.validateAndParse(rawAccess);
                 var jti = claims.getId();
                 if (jti != null) {
+                    var logoutUserId = UUID.fromString(claims.getSubject());
                     tokenDenylistService.deny(jti, claims.getExpiration().toInstant());
-                    sessionActivityService.deregister(jti, UUID.fromString(claims.getSubject()));
+                    sessionActivityService.deregister(jti, logoutUserId);
+                    // AU-2: logoff event — required by FedRAMP AU-2 baseline
+                    auditService.log(logoutUserId, "USER_LOGGED_OUT", "User", logoutUserId, null,
+                            Map.of("jti", jti), "success");
                 }
             } catch (Exception ignored) {}
         }

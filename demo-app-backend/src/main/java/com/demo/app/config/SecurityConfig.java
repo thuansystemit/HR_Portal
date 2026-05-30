@@ -59,8 +59,8 @@ public class SecurityConfig {
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
             )
-            .addFilterBefore(rateLimitFilter, CspFilter.class)
             .addFilterBefore(cspFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(rateLimitFilter, CspFilter.class)
             .addFilterBefore(internalApiKeyFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtCookieAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(mdcUserFilter, AuthorizationFilter.class);
